@@ -57,6 +57,7 @@ export function useCharacters(deps) {
   const extractingCharAppearance = ref(false)
   const extractingAnchors = ref(false)
   const addCharRefImage = ref(null)   // { dataUrl, filename }
+  const keepCharRefPriority = ref(false)
   const addCharRefFileInput = ref(null)
   let editCharacterPollTimer = null
 
@@ -270,7 +271,7 @@ export function useCharacters(deps) {
     if (!form?.id) return
     editCharacterPromptGenerating.value = true
     try {
-      const res = await characterAPI.generatePrompt(form.id)
+      const res = await characterAPI.generatePrompt(form.id, undefined, undefined, keepCharRefPriority.value)
       if (res?.polished_prompt) {
         form.polished_prompt = res.polished_prompt
         ElMessage.success('提示词已生成')
@@ -796,6 +797,7 @@ export function useCharacters(deps) {
     extractingCharAppearance,
     extractingAnchors,
     addCharRefImage,
+    keepCharRefPriority,
     addCharRefFileInput,
     // 生成状态
     charactersGenerating,

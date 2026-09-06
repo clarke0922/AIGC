@@ -610,6 +610,14 @@ async function generateTextWithVision(db, log, serviceType, userPrompt, systemPr
   return content.trim();
 }
 
+const IMAGE_PRIORITY_RULE = '参考照片人物身份优先于文字描述，如描述与照片冲突，以照片为准。如文字描述与参考照片人物特征冲突，以参考照片为准。';
+
+/** 勾选「保持与图片一致」时，在提示词末尾追加身份优先规则 */
+function withRefPriorityRule(prompt, keepRefPriority) {
+  if (!keepRefPriority || !prompt) return prompt;
+  return prompt + '\n\n' + IMAGE_PRIORITY_RULE;
+}
+
 const EXTRACT_PROMPTS = {
   character: {
     // 强调"角色概念设计图"而非"真实人物照片"，绕开人物识别安全策略
@@ -643,7 +651,7 @@ const EXTRACT_PROMPTS = {
  * entityType: 'character' | 'scene' | 'prop'
  * imageUrl: http URL 或 data:image/xxx;base64,... 格式的 data URL
  */
-async function extractDescriptionFromImage(db, log, entityType, imageUrl, entityName) {
+async function extractDescriptionFromImage(db, log, entityType, imageUrl, entityName, keepRefPriority) {
   const prompts = EXTRACT_PROMPTS[entityType];
   if (!prompts) throw new Error(`不支持的实体类型：${entityType}`);
 
@@ -657,7 +665,7 @@ async function extractDescriptionFromImage(db, log, entityType, imageUrl, entity
   try {
     const result = await generateTextWithVision(
       db, log, 'text',
-      prompts.user(entityName),
+      withRefPriorityRule(prompts.user(entityName), keepRefPriority),
       prompts.system,
       imageSource,
       { max_tokens: 2000 },
@@ -706,6 +714,8 @@ module.exports = {
   resolveEntityImageSource,
   extractDescriptionFromImage,
   EXTRACT_PROMPTS,
+  IMAGE_PRIORITY_RULE,
+  withRefPriorityRule,
   isRefusalResponse,
   postJSONWithTimeout,
 };

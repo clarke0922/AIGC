@@ -193,12 +193,12 @@ function setupRouter(cfg, db, log) {
 
   // ---------- vision: 从图片提取描述（不依赖已有实体 ID）----------
   r.post('/extract-description-from-image', async (req, res) => {
-    const { image_url, entity_type, entity_name } = req.body || {};
+    const { image_url, entity_type, entity_name, keep_ref_priority } = req.body || {};
     if (!image_url) return response.badRequest(res, '缺少 image_url');
     if (!['character', 'scene', 'prop'].includes(entity_type)) return response.badRequest(res, 'entity_type 需为 character/scene/prop');
     try {
       const { extractDescriptionFromImage } = require('../services/aiClient');
-      const out = await extractDescriptionFromImage(db, log, entity_type, image_url, entity_name);
+      const out = await extractDescriptionFromImage(db, log, entity_type, image_url, entity_name, !!keep_ref_priority);
       if (!out.ok) return response.badRequest(res, out.error);
       response.success(res, { description: out.description });
     } catch (err) {

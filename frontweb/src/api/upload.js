@@ -21,12 +21,14 @@ export const uploadAPI = {
    * 从图片（base64 data URL 或 http URL）提取实体特征描述，不依赖已有实体 ID。
    * entityType: 'character' | 'scene' | 'prop'
    * imageUrl: data:image/xxx;base64,... 或 http URL
+   * keepRefPriority: 勾选「保持与图片一致」时置 true，提示 AI 照片人物优先于文字描述
    */
-  extractDescriptionFromImage(entityType, imageUrl, entityName) {
+  extractDescriptionFromImage(entityType, imageUrl, entityName, keepRefPriority) {
     return request.post('/extract-description-from-image', {
       entity_type: entityType,
       image_url: imageUrl,
       entity_name: entityName || undefined,
+      keep_ref_priority: !!keepRefPriority,
     })
   }
 }

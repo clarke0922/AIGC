@@ -495,7 +495,7 @@ function buildFourViewImagePrompt(fourViewDescription, styleEn, styleZh) {
  * 供前端「生成提示词」按钮调用，或提取角色后后台异步调用。
  * @returns {{ ok: boolean, polished_prompt?: string, error?: string }}
  */
-async function generateCharacterPromptOnly(db, log, cfg, characterId, modelName, style) {
+async function generateCharacterPromptOnly(db, log, cfg, characterId, modelName, style, keepRefPriority) {
   const charRow = db.prepare(
     'SELECT id, drama_id, name, appearance, description, identity_anchors FROM characters WHERE id = ? AND deleted_at IS NULL'
   ).get(Number(characterId));
@@ -518,12 +518,13 @@ async function generateCharacterPromptOnly(db, log, cfg, characterId, modelName,
 
   const systemPrompt = promptI18n.getRolePolishPrompt(mergedCfg);
   const userPrompt = `角色名称：${charRow.name}\n\n角色描述：\n${appearanceText}`;
+  const finalUserPrompt = aiClient.withRefPriorityRule(userPrompt, keepRefPriority);
 
   log.info('[四视图提示词] 开始生成', { character_id: characterId, name: charRow.name });
 
   let fourViewDescription;
   try {
-    fourViewDescription = await aiClient.generateText(db, log, 'text', userPrompt, systemPrompt, {
+    fourViewDescription = await aiClient.generateText(db, log, 'text', finalUserPrompt, systemPrompt, {
       scene_key: 'role_image_polish',
       model: modelName || undefined,
       max_tokens: 4000,

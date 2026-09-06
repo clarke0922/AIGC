@@ -1733,6 +1733,10 @@
             </div>
           </div>
         </el-form-item>
+        <el-form-item label="图片优先">
+          <el-checkbox v-model="keepCharRefPriority">保持与图片一致</el-checkbox>
+          <div style="font-size:12px;color:#909399;margin-top:2px">勾选后，提取特征描述与重新生成提示词时，以参考照片为准；文字描述与照片冲突时以照片优先。</div>
+        </el-form-item>
         <el-form-item label="名称" required>
           <el-input v-model="editCharacterForm.name" placeholder="角色名称" />
         </el-form-item>
@@ -2892,6 +2896,7 @@ async function runConcurrently(items, concurrency, fn, options = {}) {
 const {
   showEditCharacter, editCharacterForm, editCharacterSaving, editCharacterPromptGenerating,
   extractingCharAppearance, extractingAnchors, addCharRefImage, addCharRefFileInput,
+  keepCharRefPriority,
   charactersGenerating, generatingCharIds, sd2CertifyingId, showCharSd2Cert, charSd2CertPayload,
   sd2VoiceUploadingId,
   showCharLibrary, charLibraryList, charLibraryLoading, charLibraryPage, charLibraryPageSize,
@@ -3462,7 +3467,7 @@ async function doExtractFromRef(type) {
     extractingCharAppearance.value = true
     try {
       const name = editCharacterForm.value?.name || ''
-      const res = await uploadAPI.extractDescriptionFromImage('character', refImage.dataUrl, name)
+      const res = await uploadAPI.extractDescriptionFromImage('character', refImage.dataUrl, name, keepCharRefPriority.value)
       if (res?.description && editCharacterForm.value) {
         editCharacterForm.value.appearance = res.description
         ElMessage.success('已从参考图提取外貌描述')

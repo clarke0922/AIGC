@@ -7,8 +7,8 @@ export const characterAPI = {
   generateImage(characterId, model, style) {
     return request.post(`/characters/${characterId}/generate-image`, { model, style })
   },
-  generatePrompt(characterId, model, style) {
-    return request.post(`/characters/${characterId}/generate-prompt`, { model, style })
+  generatePrompt(characterId, model, style, keepRefPriority) {
+    return request.post(`/characters/${characterId}/generate-prompt`, { model, style, keep_ref_priority: !!keepRefPriority })
   },
   batchGenerateImages(characterIds, model, style) {
     return request.post('/characters/batch-generate-images', {
