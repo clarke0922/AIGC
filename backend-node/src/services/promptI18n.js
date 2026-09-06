@@ -296,6 +296,7 @@ Sum(T1..TM) MUST equal this shot's JSON "duration" seconds exactly.
 Reference tokens: @图片1 = scene/environment only; @图片2+ = characters in characters[] order; then props if any.
 Dialogue: @图片2 says:"verbatim line" or …嗓音…："line". No speech: end with 无对白。
 Narration: 旁白（画面无声）："verbatim narration"
+- FORBIDDEN: rendering subtitles/captions for the spoken dialogue or narration into the video frames. Voices are audible; text must NOT appear on screen.
 Each beat: rich motion picture prose (push in, pull back, rack focus), not a static snapshot caption.`;
   }
   return `
@@ -315,6 +316,7 @@ Each beat: rich motion picture prose (push in, pull back, rack focus), not a sta
 - **对白**：有 dialogue 时必须写出原文，格式如 @图片2 的嗓音…："对白原文" 或 @图片2 说："对白原文"；无对白则句末写 **无对白。**
 - **解说**：有 narration 时写在合适子分镜：**旁白（画面无声）："解说原文"**
 - **禁止**：概括式台词（如「他说了一句重要的话」）、@人物N、markdown、SoulLens 段标签
+- **禁止**：在画面内生成或烧录对白/旁白字幕（人声可听见，但画面不得出现字幕文字）
 
 范例结构（勿照抄剧情，仅学排版）：
 画面风格和类型: 真人写实, 电影风格, 高清画质, 日本动漫画风

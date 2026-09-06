@@ -48,6 +48,7 @@ function buildFallbackUniversalMultiBeatText(sb, d, styleHint) {
   const styleLine = `画面风格和类型: 真人写实, 电影风格, 高清画质, ${styleTail}`;
 
   const lines = [styleLine, `生成一个由以下${M}个分镜组成的视频。`, DEFAULT_LINE3];
+  lines.splice(2, 0, '画面内禁止生成/烧录对白或旁白字幕：人声可听见，画面不得出现字幕文字。');
 
   for (let k = 0; k < M; k++) {
     const tk = secs[k];
