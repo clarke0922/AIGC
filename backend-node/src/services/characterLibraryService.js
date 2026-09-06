@@ -536,7 +536,7 @@ async function generateCharacterPromptOnly(db, log, cfg, characterId, modelName,
 
   const styleEn = (mergedCfg.style.default_style_en || mergedCfg.style.default_style || '').trim();
   const styleZh = (mergedCfg.style.default_style_zh || '').trim();
-  const polishedPrompt = buildFourViewImagePrompt(fourViewDescription, styleEn, styleZh);
+  const polishedPrompt = aiClient.withRefPriorityRule(buildFourViewImagePrompt(fourViewDescription, styleEn, styleZh), keepRefPriority);
 
   // 保存到 characters.polished_prompt
   db.prepare('UPDATE characters SET polished_prompt = ?, updated_at = ? WHERE id = ?').run(
@@ -629,7 +629,7 @@ async function generateCharacterFourViewImage(db, log, cfg, characterId, modelNa
 /**
  * 从角色现有图片中反向提取外貌描述，更新 appearance 字段。
  */
-async function extractAppearanceFromImage(db, log, cfg, characterId) {
+async function extractAppearanceFromImage(db, log, cfg, characterId, keepRefPriority) {
   const { generateTextWithVision, resolveEntityImageSource, EXTRACT_PROMPTS } = require('./aiClient');
 
   const charRow = db.prepare(
@@ -641,7 +641,7 @@ async function extractAppearanceFromImage(db, log, cfg, characterId) {
   if (!imgSrc) return { ok: false, error: '该角色暂无参考图片，请先上传图片' };
 
   const { system: systemPrompt, user: userFn } = EXTRACT_PROMPTS.character;
-  const userPrompt = userFn(charRow.name);
+  const userPrompt = aiClient.withRefPriorityRule(userFn(charRow.name), keepRefPriority);
 
   const { isRefusalResponse } = require('./aiClient');
   let appearance;
@@ -660,6 +660,7 @@ async function extractAppearanceFromImage(db, log, cfg, characterId) {
     return { ok: false, error: '模型因安全策略拒绝描述图中人物面部特征。建议：①使用 Gemini 模型（限制较少）；②手动填写外貌描述；③上传卡通/插画风格的参考图。' };
   }
 
+  appearance = aiClient.withRefPriorityRule(appearance, keepRefPriority);
   db.prepare('UPDATE characters SET appearance = ?, updated_at = ? WHERE id = ?')
     .run(appearance, new Date().toISOString(), Number(characterId));
 

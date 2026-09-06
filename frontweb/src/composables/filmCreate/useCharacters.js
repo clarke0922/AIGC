@@ -289,7 +289,7 @@ export function useCharacters(deps) {
     if (!form?.id) return
     extractingCharAppearance.value = true
     try {
-      const res = await characterAPI.extractFromImage(form.id)
+      const res = await characterAPI.extractFromImage(form.id, keepCharRefPriority.value)
       if (res?.appearance) {
         form.appearance = res.appearance
         ElMessage.success('已从图片提取外貌描述')

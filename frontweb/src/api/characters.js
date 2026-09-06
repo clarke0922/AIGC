@@ -38,8 +38,8 @@ export const characterAPI = {
   addToTeamLibrary(characterId, body = {}) {
     return request.post(`/characters/${characterId}/add-to-team-library`, body)
   },
-  extractFromImage(characterId) {
-    return request.post(`/characters/${characterId}/extract-from-image`, {})
+  extractFromImage(characterId, keepRefPriority) {
+    return request.post(`/characters/${characterId}/extract-from-image`, { keep_ref_priority: !!keepRefPriority })
   },
   extractAnchors(characterId) {
     return request.post(`/characters/${characterId}/extract-anchors`, {})

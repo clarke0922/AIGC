@@ -614,7 +614,7 @@ const IMAGE_PRIORITY_RULE = '参考照片人物身份优先于文字描述，如
 
 /** 勾选「保持与图片一致」时，在提示词末尾追加身份优先规则 */
 function withRefPriorityRule(prompt, keepRefPriority) {
-  if (!keepRefPriority || !prompt) return prompt;
+  if (!keepRefPriority || !prompt || prompt.includes(IMAGE_PRIORITY_RULE)) return prompt;
   return prompt + '\n\n' + IMAGE_PRIORITY_RULE;
 }
 
@@ -675,7 +675,7 @@ async function extractDescriptionFromImage(db, log, entityType, imageUrl, entity
       log.warn('[Vision] 模型拒绝描述，可能因真实人物照片触发安全策略', { entity_type: entityType, result });
       return { ok: false, error: '模型因安全策略拒绝描述图中人物面部特征。建议：①使用 Gemini 模型（限制较少）；②手动填写外貌描述；③上传卡通/插画风格的参考图。' };
     }
-    return { ok: true, description: result };
+    return { ok: true, description: withRefPriorityRule(result, keepRefPriority) };
   } catch (err) {
     log.error('[Vision] extractDescriptionFromImage 失败', {
       entity_type: entityType,

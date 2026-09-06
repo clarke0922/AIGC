@@ -285,7 +285,7 @@ function routes(db, cfg, log, uploadService) {
     },
     extractFromImage: async (req, res) => {
       try {
-        const out = await characterLibraryService.extractAppearanceFromImage(db, log, cfg, req.params.id);
+        const out = await characterLibraryService.extractAppearanceFromImage(db, log, cfg, req.params.id, !!req.body?.keep_ref_priority);
         if (!out.ok) {
           if (out.error === 'character not found') return response.notFound(res, '角色不存在');
           return response.badRequest(res, out.error);

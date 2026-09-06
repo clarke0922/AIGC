@@ -40,6 +40,7 @@ desktop/release-exact/
 desktop/release-models/
 
 desktop/release-prompts/
+desktop/release-ref-priority/
 
 # Local secrets, generated files, and runtime data
 .env
