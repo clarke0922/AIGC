@@ -18,9 +18,18 @@ const {
   jwtPartLengths,
 } = require('./klingJwt');
 
-/**
- * ?? provider ??????????api_protocol ??????????
- */
+/** 视频生成统一指令：画面/画面内不得出现任何字幕、旁白文字、对白文字或烧录文字 */
+const NO_ONSCREEN_TEXT_SUFFIX =
+  '\n[画面硬性约束] 成片画面内禁止出现任何对白字幕、旁白字幕、歌词、标识文字或烧录文字；台词与旁白仅作为人声/画外音渲染，不得以文字形式显示在画面上。';
+
+function enforceNoOnScreenText(prompt) {
+  const base = String(prompt || '').trim();
+  if (!base) return '';
+  if (/(禁字幕|不要字幕|不生成字幕|不得.*字幕|无字幕)/.test(base)) return base;
+  return base + NO_ONSCREEN_TEXT_SUFFIX;
+}
+
+/** 按 provider 推断 api_protocol（未显式配置时） */
 function inferVideoProtocol(provider) {
   const p = String(provider || '').toLowerCase();
   if (p === 'dashscope') return 'dashscope';
@@ -3671,7 +3680,7 @@ async function callMinimaxH3VideoApi(config, log, opts) {
  */
 async function callVideoApi(db, log, opts) {
   const {
-    prompt,
+    prompt: rawPrompt,
     model: preferredModel,
     duration,
     aspect_ratio,
@@ -3688,6 +3697,7 @@ async function callVideoApi(db, log, opts) {
     storage_local_path,
     video_gen_id
   } = opts;
+  const prompt = enforceNoOnScreenText(rawPrompt);
   const config = opts.config_override || getDefaultVideoConfig(db, preferredModel);
   if (!config) {
     throw new Error('???????????AI ?????? video ?????????');
@@ -4473,6 +4483,7 @@ module.exports = {
   getAgnesApiRoot,
   buildAgnesVideoImagePayload,
   formatVideoPostBodyForLog,
+  enforceNoOnScreenText,
   isSeedance2FamilyModel,
   normalizeVolcengineDuration,
   isMinimaxH3Model,
