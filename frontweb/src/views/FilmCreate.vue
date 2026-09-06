@@ -1720,22 +1720,22 @@
                 class="ref-preview-img" style="opacity:0.5" />
               <div v-else class="ref-upload-hint"><span class="ref-upload-icon">🖼</span><span>点击或拖入参考图</span></div>
             </div>
-            <div v-if="addCharRefImage" class="ref-actions">
-              <el-button type="primary" size="small" :loading="extractingCharAppearance" @click="doExtractFromRef('character')">提取特征描述</el-button>
-              <el-button size="small" @click="addCharRefImage = null">移除</el-button>
+            <div class="ref-actions">
+              <div v-if="addCharRefImage">
+                <el-button type="primary" size="small" :loading="extractingCharAppearance" @click="doExtractFromRef('character')">提取特征描述</el-button>
+                <el-button size="small" @click="addCharRefImage = null">移除</el-button>
+              </div>
+              <div v-else-if="editCharacterForm.ref_image">
+                <el-button type="primary" size="small" :loading="extractingCharAppearance" @click="doExtractCharFromImage">从参考图提取描述</el-button>
+                <el-button size="small" @click="clearCharRefImage">移除参考图</el-button>
+              </div>
+              <div v-else-if="editCharacterForm.id && (editCharacterForm.image_url || editCharacterForm.local_path) && !editCharacterForm.appearance">
+                <el-button size="small" :loading="extractingCharAppearance" @click="doExtractCharFromImage">从主图提取描述</el-button>
+              </div>
+              <el-checkbox v-model="keepCharRefPriority">保持与图片一致</el-checkbox>
             </div>
-            <div v-else-if="editCharacterForm.ref_image" class="ref-actions">
-              <el-button type="primary" size="small" :loading="extractingCharAppearance" @click="doExtractCharFromImage">从参考图提取描述</el-button>
-              <el-button size="small" @click="clearCharRefImage">移除参考图</el-button>
-            </div>
-            <div v-else-if="editCharacterForm.id && (editCharacterForm.image_url || editCharacterForm.local_path) && !editCharacterForm.appearance" class="ref-actions">
-              <el-button size="small" :loading="extractingCharAppearance" @click="doExtractCharFromImage">从主图提取描述</el-button>
-            </div>
+            <div v-if="keepCharRefPriority" style="font-size:12px;color:#909399;line-height:1.5">勾选后，提取特征描述与重新生成提示词时，以参考照片为准；文字描述与照片冲突时以照片优先。</div>
           </div>
-        </el-form-item>
-        <el-form-item label="图片优先">
-          <el-checkbox v-model="keepCharRefPriority">保持与图片一致</el-checkbox>
-          <div style="font-size:12px;color:#909399;margin-top:2px">勾选后，提取特征描述与重新生成提示词时，以参考照片为准；文字描述与照片冲突时以照片优先。</div>
         </el-form-item>
         <el-form-item label="名称" required>
           <el-input v-model="editCharacterForm.name" placeholder="角色名称" />
