@@ -41,6 +41,7 @@ desktop/release-models/
 
 desktop/release-prompts/
 desktop/release-ref-priority/
+desktop/release-prop-reference/
 
 # Local secrets, generated files, and runtime data
 .env

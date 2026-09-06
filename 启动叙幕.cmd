@@ -1,5 +1,9 @@
 @echo off
 chcp 65001 >nul
+if exist "%~dp0desktop\release-prop-reference\win-unpacked\叙幕短片工作台.exe" (
+  start "" "%~dp0desktop\release-prop-reference\win-unpacked\叙幕短片工作台.exe"
+  exit /b
+)
 if exist "%~dp0desktop\release-ref-priority\win-unpacked\叙幕短片工作台.exe" (
   start "" "%~dp0desktop\release-ref-priority\win-unpacked\叙幕短片工作台.exe"
   exit /b

@@ -143,7 +143,7 @@ export function useProps(deps) {
       ref_image: prop.ref_image || '',
     }
     showEditProp.value = true
-    if (!prop.prompt && prop.id && prop.description) {
+    if (!prop.ref_image && !prop.prompt && prop.id && prop.description) {
       editPropPromptGenerating.value = true
       let elapsed = 0
       editPropPollTimer = setInterval(async () => {
@@ -169,7 +169,7 @@ export function useProps(deps) {
 
   async function doGeneratePropPrompt() {
     const form = editPropForm.value
-    if (!form?.id) return
+    if (!form?.id || addPropRefImage.value || form.ref_image) return
     editPropPromptGenerating.value = true
     try {
       const res = await propAPI.generatePrompt(form.id)
@@ -188,14 +188,11 @@ export function useProps(deps) {
   async function savePropRefImageIfAny(propId) {
     const refImg = addPropRefImage.value
     if (!refImg || !propId) return
-    try {
-      const file = dataUrlToFile(refImg.dataUrl, refImg.filename || 'reference.png')
-      const uploadRes = await uploadAPI.uploadImage(file, { dramaId: dramaId.value })
-      const refPath = uploadRes.local_path || uploadRes.url || ''
-      await propAPI.putRefImage(propId, refPath)
-    } catch (e) {
-      console.warn('[savePropRefImage] 保存参考图失败:', e.message)
-    }
+    const file = dataUrlToFile(refImg.dataUrl, refImg.filename || 'reference.png')
+    const uploadRes = await uploadAPI.uploadImage(file, { dramaId: dramaId.value })
+    const refPath = uploadRes.local_path || uploadRes.url || ''
+    if (!refPath) throw new Error('参考图上传失败，请重试')
+    await propAPI.putRefImage(propId, refPath)
   }
 
   async function clearPropRefImage() {
@@ -253,13 +250,22 @@ export function useProps(deps) {
     if (!name || !store.dramaId) return
     addPropSaving.value = true
     try {
+      let refPath
+      if (addPropAddRefImage.value) {
+        const refImg = addPropAddRefImage.value
+        const file = dataUrlToFile(refImg.dataUrl, refImg.filename || 'reference.png')
+        const uploaded = await uploadAPI.uploadImage(file, { dramaId: dramaId.value })
+        refPath = uploaded.local_path || uploaded.url
+        if (!refPath) throw new Error('参考图上传失败，请重试')
+      }
       await propAPI.create({
         drama_id: store.dramaId,
         episode_id: currentEpisodeId.value ?? undefined,
         name,
         type: addPropForm.value.type?.trim() || undefined,
         description: addPropForm.value.description?.trim() || undefined,
-        prompt: addPropForm.value.prompt?.trim() || undefined
+        prompt: refPath ? undefined : addPropForm.value.prompt?.trim() || undefined,
+        ref_image: refPath,
       })
       showAddProp.value = false
       await loadDrama()
@@ -317,7 +323,7 @@ export function useProps(deps) {
           const p = list.find((x) => Number(x.id) === Number(prop.id))
           return !!(p && (p.image_url || p.local_path))
         })
-        ElMessage.success('道具图片已生成')
+        ElMessage.success(prop.ref_image ? '已直接使用参考图' : '道具图片已生成')
       }
     } catch (e) {
       console.error(e)

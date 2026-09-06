@@ -26,6 +26,11 @@ async function processPropImageGeneration(db, log, taskId, propId, opts) {
     taskService.updateTaskError(db, taskId, '道具不存在');
     return;
   }
+  if (prop.ref_image) {
+    const saved = propService.update(db, log, propId, { ref_image: prop.ref_image });
+    taskService.updateTaskResult(db, taskId, { image_url: saved.image_url, local_path: saved.local_path, prop_id: propId });
+    return;
+  }
   if (!prop.prompt || !String(prop.prompt).trim()) {
     taskService.updateTaskError(db, taskId, '道具没有图片提示词');
     return;
@@ -121,7 +126,12 @@ async function processPropImageGeneration(db, log, taskId, propId, opts) {
 
   const now = new Date().toISOString();
   // 旧图追加到 extra_images，与上传逻辑保持一致
-  const oldProp = db.prepare('SELECT local_path, image_url, extra_images FROM props WHERE id = ?').get(propId);
+  const oldProp = db.prepare('SELECT local_path, image_url, extra_images, ref_image FROM props WHERE id = ?').get(propId);
+  if (oldProp?.ref_image) {
+    const saved = propService.update(db, log, propId, { ref_image: oldProp.ref_image });
+    taskService.updateTaskResult(db, taskId, { image_url: saved.image_url, local_path: saved.local_path, prop_id: propId });
+    return;
+  }
   const oldPath = oldProp?.local_path || oldProp?.image_url || '';
   let extras = [];
   try { extras = oldProp?.extra_images ? JSON.parse(oldProp.extra_images) : []; } catch (_) {}
@@ -151,6 +161,10 @@ async function processPropImageGeneration(db, log, taskId, propId, opts) {
 function generatePropImage(db, log, propId, opts) {
   const prop = propService.getById(db, propId);
   if (!prop) throw new Error('道具不存在');
+  if (prop.ref_image) {
+    propService.update(db, log, propId, { ref_image: prop.ref_image });
+    return null;
+  }
   if (!prop.prompt || !String(prop.prompt).trim()) {
     throw new Error('道具没有图片提示词');
   }

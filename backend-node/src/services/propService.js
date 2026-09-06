@@ -24,11 +24,12 @@ function listByDramaId(db, dramaId) {
 }
 
 function create(db, log, req) {
+  if (req.ref_image) req = { ...req, ...referenceImageFields(req.ref_image) };
   const now = new Date().toISOString();
   const episodeId = req.episode_id != null ? Number(req.episode_id) : null;
   const info = db.prepare(
-    `INSERT INTO props (drama_id, episode_id, name, type, description, prompt, negative_prompt, image_url, local_path, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO props (drama_id, episode_id, name, type, description, prompt, negative_prompt, image_url, local_path, ref_image, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     req.drama_id,
     episodeId,
@@ -39,6 +40,7 @@ function create(db, log, req) {
     req.negative_prompt ?? null,
     req.image_url ?? null,
     req.local_path ?? null,
+    req.ref_image ?? null,
     now,
     now
   );
@@ -66,9 +68,17 @@ function getById(db, id) {
   };
 }
 
+function referenceImageFields(refImage) {
+  return /^https?:\/\//i.test(refImage)
+    ? { image_url: refImage, local_path: null }
+    : { image_url: '', local_path: refImage };
+}
+
 function update(db, log, id, updates) {
   const existing = getById(db, id);
   if (!existing) return null;
+  const refImage = updates.ref_image === undefined ? existing.ref_image : updates.ref_image;
+  if (refImage) updates = { ...updates, ...referenceImageFields(refImage) };
   const set = [];
   const params = [];
   if (updates.name != null) { set.push('name = ?'); params.push(updates.name); }
@@ -125,6 +135,7 @@ function associateWithStoryboard(db, log, storyboardId, propIds) {
 async function generatePropPromptOnly(db, log, cfg, propId, modelName, style) {
   const prop = getById(db, propId);
   if (!prop) return { ok: false, error: 'prop not found' };
+  if (prop.ref_image) return { ok: true, prompt: '', uses_reference_image: true };
 
   const dramaRow = prop.drama_id
     ? db.prepare('SELECT style, metadata FROM dramas WHERE id = ? AND deleted_at IS NULL').get(prop.drama_id)

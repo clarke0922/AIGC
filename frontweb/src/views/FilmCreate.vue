@@ -679,10 +679,10 @@
                       </div>
                     </div>
                     <div class="asset-cover-actions">
-                      <el-tooltip :content="propUseQuadGrid ? '四视图道具（前/侧/后/顶，纯色无缝背景）' : '单图道具（纯色无缝背景）'" placement="top">
+                      <el-tooltip :content="prop.ref_image ? '直接使用上传的参考图，忽略提示词' : propUseQuadGrid ? '四视图道具（前/侧/后/顶，纯色无缝背景）' : '单图道具（纯色无缝背景）'" placement="top">
                         <el-button type="primary" size="small" :loading="generatingPropIds.has(prop.id)" @click="onGeneratePropImage(prop, propUseQuadGrid)">
                           <el-icon v-if="!generatingPropIds.has(prop.id)"><MagicStick /></el-icon>
-                          AI 生成
+                          {{ prop.ref_image ? '使用参考图' : 'AI 生成' }}
                         </el-button>
                       </el-tooltip>
                       <el-button type="success" size="small" :loading="uploadingResourceId === 'prop-' + prop.id" @click="onUploadResourceClick('prop', prop.id)">
@@ -1685,9 +1685,10 @@
         <el-form-item label="描述">
           <el-input v-model="addPropForm.description" type="textarea" :rows="3" placeholder="描述" />
         </el-form-item>
-        <el-form-item label="图生提示词">
+        <el-form-item v-if="!addPropAddRefImage" label="图生提示词">
           <el-input v-model="addPropForm.prompt" type="textarea" :rows="2" placeholder="用于 AI 生成图片的提示词" />
         </el-form-item>
+        <el-form-item v-else label="图片来源">直接使用参考图，忽略图生提示词，不进行 AI 重绘。</el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="showAddProp = false">取消</el-button>
@@ -1889,7 +1890,7 @@
         <el-form-item label="描述">
           <el-input v-model="editPropForm.description" type="textarea" :autosize="{ minRows: 3, maxRows: 8 }" placeholder="道具描述" />
         </el-form-item>
-        <el-form-item label="图生提示词">
+        <el-form-item v-if="!addPropRefImage && !editPropForm.ref_image" label="图生提示词">
           <div style="width:100%">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
               <span style="font-size:12px;color:#909399">AI 润色后的图片提示词，生成图片时直接使用；可手动修改</span>
@@ -1904,6 +1905,7 @@
             />
           </div>
         </el-form-item>
+        <el-form-item v-else label="图片来源">直接使用参考图，忽略图生提示词，不进行 AI 重绘。</el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="showEditProp = false">取消</el-button>
