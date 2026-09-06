@@ -165,7 +165,7 @@ export function useCharacters(deps) {
       image_url: char.image_url || '',
       local_path: char.local_path || '',
       ref_image: char.ref_image || '',
-      identity_anchors: char.identity_anchors || '',
+      identity_anchors: typeof char.identity_anchors === 'string' ? char.identity_anchors : (char.identity_anchors ? JSON.stringify(char.identity_anchors, null, 2) : ''),
       stages: char.stages ? (typeof char.stages === 'string' ? char.stages : JSON.stringify(char.stages, null, 2)) : '',
     }
     showEditCharacter.value = true
@@ -221,6 +221,9 @@ export function useCharacters(deps) {
           personality: form.personality || undefined,
           description: form.description || undefined,
           polished_prompt: form.polished_prompt || undefined,
+          identity_anchors: form.identity_anchors !== undefined && form.identity_anchors !== ''
+            ? (typeof form.identity_anchors === 'string' ? form.identity_anchors.trim() : JSON.stringify(form.identity_anchors))
+            : undefined,
           stages: form.stages ? form.stages.trim() || undefined : undefined
         })
         await saveCharRefImageIfAny(form.id)

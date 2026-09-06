@@ -43,9 +43,20 @@ function appendPrompt(base, extra) {
   return current + ', ' + add;
 }
 
+/** 将角色的 identity_anchors JSON 转为英文图像提示词片段；无锚点返回空串 */
+function buildCharacterIdentityAnchorsText(charRow) {
+  let anchors = null;
+  if (charRow && charRow.identity_anchors) {
+    try { anchors = JSON.parse(charRow.identity_anchors); } catch (_) {}
+  }
+  if (!anchors || typeof anchors !== 'object' || Object.keys(anchors).length === 0) return '';
+  const framePromptService = require('./framePromptService');
+  return framePromptService.buildCharacterAnchorText(charRow.name, anchors, charRow.appearance);
+}
+
 function generateCharacterImage(db, log, cfg, characterId, modelName, style) {
   const charRow = db.prepare(
-    'SELECT id, drama_id, name, appearance, description, negative_prompt FROM characters WHERE id = ? AND deleted_at IS NULL'
+    'SELECT id, drama_id, name, appearance, description, identity_anchors, negative_prompt FROM characters WHERE id = ? AND deleted_at IS NULL'
   ).get(Number(characterId));
   if (!charRow) return { ok: false, error: 'character not found' };
   const drama = db.prepare('SELECT id, style, metadata FROM dramas WHERE id = ? AND deleted_at IS NULL').get(charRow.drama_id);
@@ -69,6 +80,8 @@ function generateCharacterImage(db, log, cfg, characterId, modelName, style) {
   } else {
     prompt = charRow.name || '';
   }
+  const anchorText = buildCharacterIdentityAnchorsText(charRow);
+  if (anchorText) prompt = anchorText + '\n' + prompt;
   const styleForImage = (effectiveCfg?.style?.default_style_en || effectiveCfg?.style?.default_style || '').trim();
   prompt = appendPrompt(prompt, styleForImage);
   if (!(style && String(style).trim())) {
@@ -321,6 +334,8 @@ function updateCharacter(db, log, characterId, req) {
   if (req.image_url != null) { updates.push('image_url = ?'); params.push(req.image_url); }
   if (req.local_path != null) { updates.push('local_path = ?'); params.push(req.local_path); }
   if (req.polished_prompt != null) { updates.push('polished_prompt = ?'); params.push(req.polished_prompt); }
+  if (req.identity_anchors !== undefined) { updates.push('identity_anchors = ?'); params.push(req.identity_anchors); }
+  if (req.color_palette !== undefined) { updates.push('color_palette = ?'); params.push(req.color_palette); }
   if (req.stages != null) { updates.push('stages = ?'); params.push(typeof req.stages === 'string' ? req.stages : JSON.stringify(req.stages)); }
   if (req.negative_prompt !== undefined) { updates.push('negative_prompt = ?'); params.push(req.negative_prompt); }
   if (updates.length === 0) return { ok: true };
@@ -482,7 +497,7 @@ function buildFourViewImagePrompt(fourViewDescription, styleEn, styleZh) {
  */
 async function generateCharacterPromptOnly(db, log, cfg, characterId, modelName, style) {
   const charRow = db.prepare(
-    'SELECT id, drama_id, name, appearance, description FROM characters WHERE id = ? AND deleted_at IS NULL'
+    'SELECT id, drama_id, name, appearance, description, identity_anchors FROM characters WHERE id = ? AND deleted_at IS NULL'
   ).get(Number(characterId));
   if (!charRow) return { ok: false, error: 'character not found' };
 
@@ -498,6 +513,8 @@ async function generateCharacterPromptOnly(db, log, cfg, characterId, modelName,
   } else {
     appearanceText = charRow.name || '';
   }
+  const anchorText = buildCharacterIdentityAnchorsText(charRow);
+  if (anchorText) appearanceText = `${anchorText}\n${appearanceText}`;
 
   const systemPrompt = promptI18n.getRolePolishPrompt(mergedCfg);
   const userPrompt = `角色名称：${charRow.name}\n\n角色描述：\n${appearanceText}`;
@@ -531,7 +548,7 @@ async function generateCharacterPromptOnly(db, log, cfg, characterId, modelName,
 
 async function generateCharacterFourViewImage(db, log, cfg, characterId, modelName, style) {
   const charRow = db.prepare(
-    'SELECT id, drama_id, name, appearance, description, polished_prompt, negative_prompt FROM characters WHERE id = ? AND deleted_at IS NULL'
+    'SELECT id, drama_id, name, appearance, description, identity_anchors, polished_prompt, negative_prompt FROM characters WHERE id = ? AND deleted_at IS NULL'
   ).get(Number(characterId));
   if (!charRow) return { ok: false, error: 'character not found' };
   const dramaFull = db.prepare('SELECT id, style, metadata FROM dramas WHERE id = ? AND deleted_at IS NULL').get(charRow.drama_id);
@@ -540,10 +557,13 @@ async function generateCharacterFourViewImage(db, log, cfg, characterId, modelNa
   let mergedCfg = mergeCfgStyleWithDrama(cfg, dramaFull);
   mergedCfg = applyStyleOverrideToCfg(mergedCfg, style);
   let imagePrompt;
+  const anchorText = buildCharacterIdentityAnchorsText(charRow);
 
   if (charRow.polished_prompt && String(charRow.polished_prompt).trim()) {
-    // 直接使用已保存的提示词（用户可能已编辑过）
-    imagePrompt = String(charRow.polished_prompt).trim();
+    // 直接使用已保存的提示词（用户可能已编辑过），身份锚点作为最高优先级约束前置
+    imagePrompt = anchorText
+      ? `${anchorText}\n${String(charRow.polished_prompt).trim()}`
+      : String(charRow.polished_prompt).trim();
     log.info('[四视图] 使用已保存的 polished_prompt，跳过文字AI', { character_id: characterId });
   } else {
     // 没有预生成提示词，临时生成（与 generateCharacterPromptOnly 同逻辑）
@@ -555,6 +575,7 @@ async function generateCharacterFourViewImage(db, log, cfg, characterId, modelNa
     } else {
       appearanceText = charRow.name || '';
     }
+    if (anchorText) appearanceText = `${anchorText}\n${appearanceText}`;
 
     const systemPrompt = promptI18n.getRolePolishPrompt(mergedCfg);
     const userPrompt = `角色名称：${charRow.name}\n\n角色描述：\n${appearanceText}`;
@@ -1063,4 +1084,5 @@ module.exports = {
   extractAppearanceFromImage,
   registerCharacterJimengMaterialAsset,
   refreshCharacterJimengMaterialAsset,
+  buildCharacterIdentityAnchorsText,
 };

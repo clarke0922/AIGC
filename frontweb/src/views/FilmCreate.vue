@@ -1786,12 +1786,9 @@
             </div>
             <el-input
               v-if="editCharacterForm.identity_anchors"
-              :value="typeof editCharacterForm.identity_anchors === 'string'
-                ? editCharacterForm.identity_anchors
-                : JSON.stringify(editCharacterForm.identity_anchors, null, 2)"
+              v-model="editCharacterForm.identity_anchors"
               type="textarea"
               :rows="4"
-              readonly
               style="font-size:11px;font-family:monospace"
               placeholder="点击「提炼视觉锚点」生成"
             />
