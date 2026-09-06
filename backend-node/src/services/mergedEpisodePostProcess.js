@@ -213,8 +213,7 @@ async function runMergedEpisodePostProcess(db, log, opts) {
     return { ok: false, error: '无效合成参数' };
   }
 
-  const needAudio = wantDial || wantNarr;
-  if (!needAudio && !watermarkText) {
+  if (!wantDial && !wantNarr && !watermarkText) {
     return { ok: false, error: 'NO_POST_OPTS' };
   }
 
@@ -222,6 +221,12 @@ async function runMergedEpisodePostProcess(db, log, opts) {
   if (videoDur == null) {
     return { ok: false, error: '无法读取合成视频时长' };
   }
+
+  const rows = scenes.map(sc => db.prepare(
+    'SELECT dialogue, narration, audio_local_path, narration_audio_local_path FROM storyboards WHERE id = ? AND deleted_at IS NULL'
+  ).get(Number(sc.scene_id)));
+  const needAudio = (wantDial && rows.some(row => row?.audio_local_path))
+    || (wantNarr && rows.some(row => String(row?.narration || '').trim()));
 
   const tempRoot = path.join(require('os').tmpdir(), 'drama-merged-post', String(episodeId || 0), String(Date.now()));
   fs.mkdirSync(tempRoot, { recursive: true });
@@ -232,25 +237,25 @@ async function runMergedEpisodePostProcess(db, log, opts) {
     let srtPath = null;
     let srtLines = [];
 
-    if (needAudio) {
+    {
       let tMs = 0;
       let srtIdx = 1;
       const segmentFiles = [];
 
       for (let i = 0; i < scenes.length; i++) {
         const sc = scenes[i];
-        const sbId = Number(sc.scene_id);
         const slotSec = Math.max(0.2, Number(sc.duration) || 5);
-        const row = db.prepare(
-          'SELECT dialogue, narration, audio_local_path, narration_audio_local_path FROM storyboards WHERE id = ? AND deleted_at IS NULL'
-        ).get(sbId);
+        const row = rows[i];
 
         const narrText = (row?.narration && String(row.narration).trim()) ? String(row.narration).trim() : '';
-        if (wantNarr && narrText) {
+        // Bundled libass may lack Unicode line breaking; wrap Chinese explicitly for portrait frames.
+        const subtitleText = [row?.dialogue, narrText].map(text => String(text || '').trim().replace(/(.{12})(?=.)/gu, '$1\n')).filter(Boolean).join('\n');
+        if (wantNarr && subtitleText) {
           const durMs = Math.round(slotSec * 1000);
-          srtLines.push(String(srtIdx++), `${formatSrtTimestamp(tMs)} --> ${formatSrtTimestamp(tMs + durMs)}`, narrText, '');
+          srtLines.push(String(srtIdx++), `${formatSrtTimestamp(tMs)} --> ${formatSrtTimestamp(tMs + durMs)}`, subtitleText, '');
         }
         tMs += Math.round(slotSec * 1000);
+        if (!needAudio) continue;
 
         const diaFit = path.join(tempRoot, `dia_fit_${i}.mp3`);
         const narrFit = path.join(tempRoot, `narr_fit_${i}.mp3`);
@@ -259,7 +264,8 @@ async function runMergedEpisodePostProcess(db, log, opts) {
         if (wantDial) {
           const rel = row?.audio_local_path && String(row.audio_local_path).trim();
           const srcAbs = rel ? path.join(storageRoot, rel.replace(/\//g, path.sep)) : null;
-          if (srcAbs && fs.existsSync(srcAbs)) {
+          if (srcAbs && !fs.existsSync(srcAbs)) return { ok: false, error: `第${i + 1}镜对白配音文件不存在，请重新生成配音` };
+          if (srcAbs) {
             if (!fitAudioToSlot(srcAbs, slotSec, diaFit, log)) {
               return { ok: false, error: `对白配音时长对齐失败 #${i}` };
             }
@@ -322,14 +328,16 @@ async function runMergedEpisodePostProcess(db, log, opts) {
         segmentFiles.push(segOut);
       }
 
-      const concatOut = path.join(tempRoot, 'full_mix.mp3');
-      if (!concatMp3List(segmentFiles, concatOut, log)) {
-        return { ok: false, error: '音轨拼接失败' };
-      }
+      if (needAudio) {
+        const concatOut = path.join(tempRoot, 'full_mix.mp3');
+        if (!concatMp3List(segmentFiles, concatOut, log)) {
+          return { ok: false, error: '音轨拼接失败' };
+        }
 
-      alignedAudioPath = path.join(tempRoot, 'aligned_mix.mp3');
-      if (!alignAudioToVideoDuration(concatOut, videoDur, alignedAudioPath, log)) {
-        return { ok: false, error: '音轨与视频总时长对齐失败' };
+        alignedAudioPath = path.join(tempRoot, 'aligned_mix.mp3');
+        if (!alignAudioToVideoDuration(concatOut, videoDur, alignedAudioPath, log)) {
+          return { ok: false, error: '音轨与视频总时长对齐失败' };
+        }
       }
 
       if (wantNarr && srtLines.length > 0) {
@@ -348,7 +356,7 @@ async function runMergedEpisodePostProcess(db, log, opts) {
     const vfParts = [];
     if (hasSubs) {
       const subEsc = escapeFfmpegPath(srtPath);
-      vfParts.push(`subtitles='${subEsc}':charenc=UTF-8`);
+      vfParts.push(`subtitles='${subEsc}':charenc=UTF-8:force_style='FontName=Microsoft YaHei,FontSize=14,MarginL=20,MarginR=20,MarginV=24,Outline=1'`);
     }
     if (hasWm) {
       const wmFile = path.join(tempRoot, 'watermark.txt');
@@ -371,21 +379,25 @@ async function runMergedEpisodePostProcess(db, log, opts) {
         return { ok: false, error: '内部错误：缺少对齐音轨' };
       }
       const args = ['-y', '-i', mergedAbsPath, '-i', alignedAudioPath];
+      const originalAudio = ffprobeHasAudio(mergedAbsPath);
+      if (originalAudio) {
+        filterComplex += `${filterComplex ? ';' : ''}[0:a:0][1:a:0]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[aout]`;
+      }
       if (filterComplex) {
-        args.push('-filter_complex', filterComplex, '-map', '[vout]', '-map', '1:a');
+        args.push('-filter_complex', filterComplex, '-map', vfParts.length ? '[vout]' : '0:v:0', '-map', originalAudio ? '[aout]' : '1:a:0');
       } else {
         args.push('-map', '0:v', '-map', '1:a');
       }
       args.push(
         '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
-        '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-shortest', outAbs
+        '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-t', String(videoDur), outAbs
       );
       if (!runFfmpeg(args, log, 'mux_av')) {
         return { ok: false, error: '烧录字幕/水印或混音失败（请确认 ffmpeg 含 libx264）' };
       }
     } else {
       if (!filterComplex) {
-        return { ok: false, error: '内部错误：仅水印但无滤镜链' };
+        return { ok: true, relativePath: path.relative(storageRoot, mergedAbsPath).replace(/\\/g, '/') };
       }
       const args = ['-y', '-i', mergedAbsPath, '-filter_complex', filterComplex, '-map', '[vout]'];
       if (ffprobeHasAudio(mergedAbsPath)) {

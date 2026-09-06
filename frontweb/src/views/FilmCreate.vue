@@ -1600,13 +1600,13 @@
           <el-form-item label="字幕">
             <div class="video-option-row">
               <el-switch v-model="videoSubtitle" />
-              <span v-if="videoSubtitle" class="video-option-hint">开启后，合成整集时会检测解说旁白：若有文案则自动生成 SRT、按分镜时长合成旁白语音（过长加速 / 过短补静音）、与成片对齐后烧录字幕并混音。</span>
+              <span v-if="videoSubtitle" class="video-option-hint">按视频实际时长烧录各镜对白与旁白字幕，保留原视频声音。有旁白文案时会生成旁白配音并叠加到原声。</span>
             </div>
           </el-form-item>
           <el-form-item label="对白烧录">
             <div class="video-option-row">
               <el-switch v-model="videoBurnDialogue" />
-              <span v-if="videoBurnDialogue" class="video-option-hint">开启后，将把各镜「配音」生成的对白 TTS 按分镜时长对齐并混入整集成片（无对白音频的分镜为静音）。可与「字幕」旁白同时开启，两条音轨会叠混。</span>
+              <span v-if="videoBurnDialogue" class="video-option-hint">将各镜「配音」生成的对白 TTS 按实际视频时长对齐并叠加到原声。没有独立配音的镜头保留原视频声音。</span>
             </div>
           </el-form-item>
           <el-form-item label="水印">

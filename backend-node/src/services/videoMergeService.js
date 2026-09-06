@@ -161,7 +161,7 @@ function runFfmpegConcat(localPaths, outputPath, log) {
 }
 
 /**
- * 异步处理视频合成：优先使用 ffmpeg 真正合并多段视频；失败或无 ffmpeg 时用首段作为 merged_url。
+ * 异步处理视频合成：合并全部片段，并完成请求的字幕与音频处理。
  */
 async function processVideoMerge(db, log, mergeId, baseUrl) {
   const r = db.prepare('SELECT * FROM video_merges WHERE id = ? AND deleted_at IS NULL').get(mergeId);
@@ -190,7 +190,8 @@ async function processVideoMerge(db, log, mergeId, baseUrl) {
     return;
   }
 
-  const totalDuration = scenes.reduce((sum, s) => sum + (Number(s.duration) || 0), 0);
+  let totalDuration = 0;
+  let mergeError = null;
   const storageRoot = getStorageRoot();
   const tempDir = path.join(require('os').tmpdir(), 'drama-video-merge');
   if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
@@ -207,6 +208,12 @@ async function processVideoMerge(db, log, mergeId, baseUrl) {
       log
     );
     if (p) {
+      const duration = require('./mergedEpisodePostProcess').ffprobeDurationSec(p);
+      if (duration == null) mergeError = `第${i + 1}镜无法读取实际时长`;
+      else {
+        scenes[i].duration = duration;
+        totalDuration += duration;
+      }
       localPaths.push(p);
       if (p.startsWith(tempDir)) toCleanup.push(p);
     }
@@ -222,7 +229,7 @@ async function processVideoMerge(db, log, mergeId, baseUrl) {
   });
 
   let mergedRelativePath = null;
-  if (localPaths.length > 0 && ffmpegAvailable && localPaths.length <= 100) {
+  if (!mergeError && localPaths.length === scenes.length && ffmpegAvailable && localPaths.length <= 100) {
     const projectSubdir = storageLayout.getProjectStorageSubdir(db, r.drama_id);
     const sub = projectSubdir && String(projectSubdir).trim();
     const mergedDir = sub
@@ -264,8 +271,9 @@ async function processVideoMerge(db, log, mergeId, baseUrl) {
       if (post.ok && post.relativePath) {
         mergedRelativePath = post.relativePath;
         log.info('Video merge: merged episode post-process', { merge_id: mergeId, out: mergedRelativePath });
-      } else if (post.error && post.error !== 'NO_POST_OPTS') {
-        log.warn('Video merge: post-process skipped', { merge_id: mergeId, err: post.error });
+      } else {
+        mergeError = post.error || '字幕或音频处理失败';
+        log.warn('Video merge: post-process failed', { merge_id: mergeId, err: mergeError });
       }
     }
   }
@@ -274,8 +282,8 @@ async function processVideoMerge(db, log, mergeId, baseUrl) {
     try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch (_) {}
   }
 
-  if (!mergedRelativePath || localPaths.length !== scenes.length) {
-    const message = '视频合成失败或素材缺失，未生成完整成片。请检查 FFmpeg 和所有镜头文件。';
+  if (mergeError || !mergedRelativePath || localPaths.length !== scenes.length) {
+    const message = mergeError || '视频合成失败或素材缺失，未生成完整成片。请检查 FFmpeg 和所有镜头文件。';
     db.prepare('UPDATE video_merges SET status = ?, error_msg = ? WHERE id = ?').run('failed', message, mergeId);
     if (taskId) taskService.updateTaskError(db, taskId, message);
     return;
