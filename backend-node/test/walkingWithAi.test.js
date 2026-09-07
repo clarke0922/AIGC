@@ -49,10 +49,12 @@ test('self-hosted H3 uses the configured /api/v1 prefix, uploads assets, submits
   assert.equal(frames.inputs.last_frame,'asset-1');
   assert.equal(uploads.length,1);
   assert.match(uploads[0],/image-bytes/);
-  await invoke({reference_urls:[image],first_frame_url:image});
+  await invoke({reference_urls:[image,'data:image/png;base64,Y2hhcmFjdGVy','data:image/png;base64,cHJvcA=='],first_frame_url:image});
   const refs=JSON.parse(requests.at(-1).raw);
   assert.equal(refs.mode,'r2v');
-  assert.deepEqual(refs.inputs.reference_images,['asset-2']);
+  assert.deepEqual(refs.inputs.reference_images,['asset-2','asset-3','asset-4']);
+  assert.match(uploads[2],/character/);
+  assert.match(uploads[3],/prop/);
   assert.equal(refs.inputs.first_frame,undefined);
   const completed=await pollVideoTask(null,log,1,'job-1',config,1,0);
   assert.equal(completed.video_url,origin+'/view?filename=result.mp4&type=output');

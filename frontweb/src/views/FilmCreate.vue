@@ -6236,6 +6236,8 @@ function canUseUniversalOmniVideoApi(cfg) {
   const proto = String(cfg.api_protocol || '').toLowerCase()
   const provider = String(cfg.provider || '').toLowerCase()
   const model = videoModelNameFromAiConfig(cfg).toLowerCase()
+  if (proto === 'walkingwithai' || proto === 'minimax_h3') return true
+  if ((!proto || proto === 'openai') && (provider === 'minimax_h3' || /^minimax[-_]?h3\b/.test(model))) return true
   if (proto === 'kling_omni') return true
   // 选了 volcengine_omni 即表示走多图参考；模型名可能是 996 等网关别名（如 mingiz-sd2），勿再按 seedance 字样拦截
   if (proto === 'volcengine_omni') return true
