@@ -34,9 +34,6 @@ function create(db, log, cfg) {
     if (!body.service_type || !body.name || !body.provider || !body.base_url) {
       return response.badRequest(res, '缺少必填字段: service_type, name, provider, base_url');
     }
-    if (body.api_key === undefined || body.api_key === null) {
-      return response.badRequest(res, '缺少必填字段: api_key');
-    }
     try {
       const config = aiConfigService.createConfig(db, log, {
         ...body,
@@ -106,8 +103,8 @@ function bulkUpdateKey(db, log, cfg) {
 function testConnection(log) {
   return async (req, res) => {
     const body = req.body || {};
-    if (!body.base_url || !body.api_key) {
-      return response.badRequest(res, '缺少 base_url 或 api_key');
+    if (!body.base_url) {
+      return response.badRequest(res, '缺少 base_url');
     }
     try {
       await aiConfigService.testConnection({

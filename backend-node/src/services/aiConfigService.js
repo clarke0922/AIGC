@@ -251,7 +251,6 @@ function rowToConfig(r) {
 async function testConnection(opts) {
   const base = (opts.base_url || '').replace(/\/$/, '');
   if (!base) throw new Error('base_url 必填');
-  if (!opts.api_key) throw new Error('api_key 必填');
   const models = Array.isArray(opts.model) ? opts.model : opts.model != null ? [opts.model] : [];
   const model = models[0] || '';
   if (!model && (opts.provider === 'gemini' || opts.provider === 'google')) throw new Error('model 必填');
@@ -265,7 +264,7 @@ async function testConnection(opts) {
     const url = base + '/api/v1/nanobanana/record-info?taskId=test-connectivity';
     const res = await fetch(url, {
       method: 'GET',
-      headers: { Authorization: 'Bearer ' + (opts.api_key || '') },
+      headers: { ...(opts.api_key ? { Authorization: 'Bearer ' + opts.api_key } : {}) },
     });
     if (res.status === 401 || res.status === 403) {
       const text = await res.text();
@@ -308,7 +307,7 @@ async function testConnection(opts) {
     const probeBody = JSON.stringify({ model: model || 'speech-02-hd', text: 'hi', stream: false });
     const res = await fetch(probeUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (opts.api_key || '') },
+      headers: { 'Content-Type': 'application/json', ...(opts.api_key ? { Authorization: 'Bearer ' + opts.api_key } : {}) },
       body: probeBody,
     });
     if (res.status === 401 || res.status === 403) {
@@ -350,7 +349,7 @@ async function testConnection(opts) {
     console.log('[testConnection] DashScope 非文本服务，用 compatible chat 验证 key', { chatUrl, serviceType, model });
     const res = await fetch(chatUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + opts.api_key },
+      headers: { 'Content-Type': 'application/json', ...(opts.api_key ? { Authorization: 'Bearer ' + opts.api_key } : {}) },
       body: JSON.stringify(body),
     });
     // 401/403 = key 无效，其他均视为联通
@@ -372,7 +371,7 @@ async function testConnection(opts) {
     console.log('[testConnection] 视频服务，用 chat/completions 验证 key', { url, serviceType, model });
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (opts.api_key || '') },
+      headers: { 'Content-Type': 'application/json', ...(opts.api_key ? { Authorization: 'Bearer ' + opts.api_key } : {}) },
       body: JSON.stringify(body),
     });
     // 401/403 = key 无效；其他（400 模型不存在等）视为联通
@@ -396,7 +395,7 @@ async function testConnection(opts) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: 'Bearer ' + (opts.api_key || ''),
+        ...(opts.api_key ? { Authorization: 'Bearer ' + opts.api_key } : {}),
       },
       body: JSON.stringify(body),
     });
@@ -444,7 +443,7 @@ async function testConnection(opts) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: 'Bearer ' + (opts.api_key || ''),
+      ...(opts.api_key ? { Authorization: 'Bearer ' + opts.api_key } : {}),
     },
     body: JSON.stringify(body),
   });

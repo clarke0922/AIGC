@@ -18,7 +18,7 @@ function routes(db,cfg,log) {
     })();
     res.status(201).json(S.project(db,id));
   }));
-  r.get('/models',handle((req,res)=>res.json(configs.listConfigs(db).map(c=>({id:c.id,name:c.name,service_type:c.service_type,model:c.model,base_url:c.base_url,api_protocol:c.api_protocol,configured:!!c.api_key})))));
+  r.get('/models',handle((req,res)=>res.json(configs.listConfigs(db).map(c=>({id:c.id,name:c.name,service_type:c.service_type,model:c.model,base_url:c.base_url,api_protocol:c.api_protocol,configured:!!c.is_active})))));
   r.post('/models',handle((req,res)=>{
     const b=req.body;
     if(!['text','asr','image','video'].includes(b.kind)) S.fail('模型类型无效');
@@ -26,7 +26,8 @@ function routes(db,cfg,log) {
     const [url,endpoint,protocol,provider]=defaults[b.kind];
     const base=b.base_url || url, u=new URL(base);
     if(u.protocol!=='https:' && !(u.protocol==='http:' && ['127.0.0.1','localhost'].includes(u.hostname))) S.fail('请填写HTTPS接口地址');
-    if(!b.model || !b.api_key || b.api_key.length>2000) S.fail('模型标识和密钥必填');
+    if(!b.model) S.fail('模型标识必填');
+    if(b.api_key != null && (typeof b.api_key !== 'string' || b.api_key.length>2000)) S.fail('密钥格式无效或超过2000字符');
     const model=configs.createConfig(db,log,{service_type:b.kind,provider,name:'简易工作台 '+b.kind,base_url:base,endpoint,query_endpoint:b.kind==='video' ? '/contents/generations/tasks/{task_id}' : '',api_protocol:protocol,api_key:b.api_key,model:[b.model],is_active:true,is_default:false});
     res.status(201).json({id:model.id});
   }));

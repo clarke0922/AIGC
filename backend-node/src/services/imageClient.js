@@ -389,7 +389,7 @@ async function callKlingImageApi(config, log, opts) {
   const apiKey = config.api_key || '';
   const headers = {
     'Content-Type': 'application/json',
-    Authorization: 'Bearer ' + apiKey,
+    ...(apiKey ? { Authorization: 'Bearer ' + apiKey } : {}),
   };
 
   let ep = config.endpoint || '/v1/images/generations';
@@ -531,7 +531,7 @@ async function callNanoBananaImageApi(config, log, opts) {
   const apiKey = config.api_key || '';
   const headers = {
     'Content-Type': 'application/json',
-    Authorization: 'Bearer ' + apiKey,
+    ...(apiKey ? { Authorization: 'Bearer ' + apiKey } : {}),
   };
   // 解析参考图：本地路径 / localhost URL → base64，确保外部 API 可访问
   const rawRefs = Array.isArray(reference_image_urls) ? reference_image_urls.filter(Boolean) : [];
@@ -880,7 +880,7 @@ async function callDashScopeImageApi(config, log, opts) {
     log.info('Image API request (Qwen-Image sync)', { url: url.slice(0, 70), model: body.model, image_gen_id });
     const qwenHeaders = {
       'Content-Type': 'application/json',
-      Authorization: 'Bearer ' + (config.api_key || ''),
+      ...(config.api_key ? { Authorization: 'Bearer ' + config.api_key } : {}),
     };
     let raw;
     let httpStatus;
@@ -968,7 +968,7 @@ async function callDashScopeImageApi(config, log, opts) {
   });
   const headers = {
     'Content-Type': 'application/json',
-    Authorization: 'Bearer ' + (config.api_key || ''),
+    ...(config.api_key ? { Authorization: 'Bearer ' + config.api_key } : {}),
   };
   if (stream) headers['X-DashScope-Sse'] = 'enable';
   let raw;
@@ -1549,7 +1549,7 @@ async function callImageApi(db, log, opts) {
   });
   const openaiCompatHeaders = {
     'Content-Type': 'application/json',
-    Authorization: 'Bearer ' + (config.api_key || ''),
+    ...(config.api_key ? { Authorization: 'Bearer ' + config.api_key } : {}),
   };
   let raw;
   let httpStatus;

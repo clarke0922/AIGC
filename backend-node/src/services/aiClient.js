@@ -337,7 +337,7 @@ async function generateText(db, log, serviceType, userPrompt, systemPrompt, opti
   body = applyDeepSeekChatOptions(config, body);
   const startMs = Date.now();
   log.info('AI generateText request', { url: url.slice(0, 60), model, max_tokens: finalMaxTokens ?? '(model default)', json_mode, stream: true });
-  const res = await postJSONStream(url, { Authorization: 'Bearer ' + (config.api_key || '') }, body, 60000, (receivedLen, event, accumulated) => {
+  const res = await postJSONStream(url, { ...(config.api_key ? { Authorization: 'Bearer ' + config.api_key } : {}) }, body, 60000, (receivedLen, event, accumulated) => {
     if (event === 'first_token') {
       log.info('AI stream first token', { model, ttft_ms: Date.now() - startMs });
     } else if (receivedLen > 0 && receivedLen % 500 < 20) {
@@ -443,7 +443,7 @@ async function streamGenerateText(db, log, serviceType, userPrompt, systemPrompt
   let lastLen = 0;
   const res = await postJSONStream(
     url,
-    { Authorization: 'Bearer ' + (config.api_key || '') },
+    { ...(config.api_key ? { Authorization: 'Bearer ' + config.api_key } : {}) },
     body,
     silenceMs,
     (receivedLen, event, accumulated) => {
@@ -592,7 +592,7 @@ async function generateTextWithVision(db, log, serviceType, userPrompt, systemPr
   let res;
   try {
     // 使用非流式请求：视觉分析响应短，且流式对推理模型（o1/o3/o4）和部分代理兼容性差
-    res = await postJSONNonStream(url, { Authorization: 'Bearer ' + (config.api_key || '') }, body, 120000);
+    res = await postJSONNonStream(url, { ...(config.api_key ? { Authorization: 'Bearer ' + config.api_key } : {}) }, body, 120000);
   } catch (httpErr) {
     log.error('[Vision] HTTP 请求失败', { model, url: url.slice(0, 80), error: httpErr.message });
     throw httpErr;

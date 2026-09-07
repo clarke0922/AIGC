@@ -217,7 +217,7 @@
           <el-descriptions-item label="厂商">{{ form.provider }}</el-descriptions-item>
         </el-descriptions>
         <el-form ref="formRef" :model="form" label-width="100px">
-          <el-form-item prop="api_key" :rules="[{ required: true, message: '请输入 API Key', trigger: 'blur' }]">
+          <el-form-item prop="api_key">
             <template #label><span class="form-label-tip">API Key</span></template>
             <el-input
               v-model="form.api_key"
@@ -554,7 +554,7 @@ input_reference = (图片文件，可选)</pre>
           <el-input
             v-model="form.api_key"
             type="password"
-            :placeholder="form.service_type === 'jimeng2_character_auth' ? 'Bearer Token' : (form.provider === 'jimeng_ai_api' ? '即梦 Session，多个用英文逗号分隔' : 'API 密钥')"
+            :placeholder="form.service_type === 'jimeng2_character_auth' ? 'Bearer Token' : (form.provider === 'jimeng_ai_api' ? '即梦 Session，多个用英文逗号分隔' : 'API 密钥（可选，本地模型可留空）')"
             show-password
           />
         </el-form-item>
@@ -1061,7 +1061,7 @@ input_reference = (图片文件，可选)</pre>
           v-if="testServiceType === 'image' || testServiceType === 'storyboard_image' || testServiceType === 'video'"
           type="success"
           title="连接成功"
-          description="API Key 有效，网络已连通。提示：测试仅验证 Key 合法性，不实际生成图片/视频，模型名填错、账号未开通该功能或配额不足时实际生成仍可能报错。"
+          description="连接测试通过。提示：不实际生成图片/视频，模型名填错、账号未开通该功能或配额不足时实际生成仍可能报错。"
           show-icon
           :closable="false"
         />
@@ -1275,24 +1275,6 @@ const rules = computed(() => ({
   name: [{ required: true, message: '请输入名称', trigger: 'blur' }],
   provider: [{ required: true, message: '请选择或输入厂商', trigger: 'change' }],
   base_url: [{ required: true, message: '请输入 Base URL', trigger: 'blur' }],
-  api_key: [
-    {
-      validator: (_rule, v, cb) => {
-        const st = form.value.service_type
-        if (st === 'jimeng2_character_auth') {
-          if (v != null && String(v).trim()) return cb()
-          return cb(new Error('请填写 Token'))
-        }
-        const proto = form.value.api_protocol
-        const ak = (form.value.kling_access_key || '').trim()
-        const sk = (form.value.kling_secret_key || '').trim()
-        if (st === 'video' && proto === 'kling_omni' && ak && sk) return cb()
-        if (v != null && String(v).trim()) return cb()
-        cb(new Error('请输入 API Key，或使用官方 AccessKey + SecretKey（可不填 API Key）'))
-      },
-      trigger: 'blur',
-    },
-  ],
 }))
 const testVisible = ref(false)
 const testResult = ref(null)

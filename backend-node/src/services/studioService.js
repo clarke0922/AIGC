@@ -14,7 +14,7 @@ function settingsFor(db, p, kind) {
   const st = p.settings[kind];
   if (!st?.config_id || !st.model) S.fail(`请先配置${kind}模型和价格`);
   const config = aiConfigs.getConfig(db, Number(st.config_id));
-  if (!config?.is_active || !config.api_key) S.fail(`请在模型设置中填写${kind}密钥`);
+  if (!config?.is_active) S.fail(`请在模型设置中启用${kind}配置`);
   if (!config.model.includes(st.model)) S.fail('指定模型不在该配置中');
   if (config.service_type !== kind && !(kind === 'image' && config.service_type === 'storyboard_image')) S.fail('模型类型不匹配');
   const url = new URL(config.base_url);
@@ -115,7 +115,7 @@ async function transcribe(db,cfg,log,id,body,file) {
 async function chat(config, model, system, prompt) {
   const endpoint = config.endpoint || '/chat/completions';
   const body = applyDeepSeekChatOptions(config,{ model, messages:[{role:'system',content:system},{role:'user',content:prompt}], max_tokens:MAX_TOKENS, response_format:{type:'json_object'}, stream:false });
-  const res = await postJSONWithTimeout(config.base_url.replace(/\/$/,'') + endpoint, {Authorization:'Bearer '+config.api_key},body,120000);
+  const res = await postJSONWithTimeout(config.base_url.replace(/\/$/,'') + endpoint, {...(config.api_key ? {Authorization:'Bearer '+config.api_key} : {})},body,120000);
   if (res.statusCode < 200 || res.statusCode >= 300) throw new Error('模型接口返回HTTP '+res.statusCode+'，请检查模型权限与余额');
   const data = JSON.parse(res.raw), content = data.choices?.[0]?.message?.content;
   if (!content) throw new Error('模型没有返回内容');
@@ -145,7 +145,7 @@ async function execute(db,cfg,log,taskId, resume = false) {
     let config;
     if (t.kind !== 'export') {
       config = aiConfigs.getConfig(db,Number(st.config_id));
-      if (!config?.api_key) throw new Error('模型密钥未配置');
+      if (!config?.is_active) throw new Error('模型配置不存在或未启用');
       // A queued task uses its saved model/endpoint, never silently follows edited settings.
       config = { ...config, ...st, model:[st.model], default_model:st.model };
     }
@@ -170,7 +170,7 @@ async function execute(db,cfg,log,taskId, resume = false) {
       const source=media.local(root,t.input.file), wav=source+'.wav';
       await media.run(require('../utils/ffmpegPath').getFfmpegPath(),['-y','-i',source,'-vn','-ar','16000','-ac','1','-c:a','pcm_s16le',wav]);
       const audio=fs.readFileSync(wav);
-      const res=await postJSONWithTimeout(config.base_url.replace(/\/$/,'')+(config.endpoint || '/chat/completions'),{Authorization:'Bearer '+config.api_key},{model:st.model,messages:[{role:'user',content:[{type:'input_audio',input_audio:{data:'data:audio/wav;base64,'+audio.toString('base64')}}]}],asr_options:{language:'zh'},stream:false},120000);
+      const res=await postJSONWithTimeout(config.base_url.replace(/\/$/,'')+(config.endpoint || '/chat/completions'),{...(config.api_key ? {Authorization:'Bearer '+config.api_key} : {})},{model:st.model,messages:[{role:'user',content:[{type:'input_audio',input_audio:{data:'data:audio/wav;base64,'+audio.toString('base64')}}]}],asr_options:{language:'zh'},stream:false},120000);
       if(res.statusCode<200 || res.statusCode>=300) throw new Error('语音接口返回HTTP '+res.statusCode);
       const data=JSON.parse(res.raw); if(!data.choices?.[0]?.message?.content) throw new Error('未识别出文字');
       result={transcript:data.choices[0].message.content}; usage=data.usage; providerId=data.id;

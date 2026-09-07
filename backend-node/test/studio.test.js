@@ -195,3 +195,54 @@ test('local provider integration: text, ASR, image references, video task ID and
     assert.equal(duplicate.id,transcript.id);
   } finally { await new Promise(resolve=>server.close(resolve));db.close(); }
 });
+test('optional API key: save, clear, test connection and generate through a local endpoint', async (t) => {
+  const {db,id}=fixture();
+  t.after(()=>db.close());
+  const routes=require('../src/routes/aiConfig')(db,log,{});
+  const requests=[];
+  const server=require('http').createServer(async(req,res)=>{
+    let raw=''; for await (const chunk of req) raw+=chunk;
+    requests.push({headers:req.headers,body:JSON.parse(raw)});
+    if (requests.at(-1).body.stream) {
+      res.setHeader('Content-Type','text/event-stream');
+      return res.end('data: '+JSON.stringify({choices:[{delta:{content:'缓慢推近'}}]})+'\n\ndata: [DONE]\n\n');
+    }
+    res.setHeader('Content-Type','application/json');
+    res.end(JSON.stringify({choices:[{message:{content:JSON.stringify({camera:'缓慢推近'})}}],usage:{prompt_tokens:1,completion_tokens:1}}));
+  });
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const base_url='http://127.0.0.1:'+server.address().port;
+  const response=()=>({status(code){this.code=code;return this},json(body){this.body=body;return this}});
+  const configs=require('../src/services/aiConfigService');
+  for (const api_key of [undefined,'']) {
+    const res=response();
+    routes.create({body:{service_type:'text',provider:'openai',name:'local',base_url,model:['local-model'],api_key,is_active:true}},res);
+    assert.equal(res.code,201);
+    const connection=response();
+    await routes.testConnection({body:{base_url,model:'local-model',api_key}},connection);
+    assert.equal(connection.code,200);
+  }
+  const c=configs.listConfigs(db)[0];
+  configs.updateConfig(db,log,c.id,{api_key:'test-token'});
+  await configs.testConnection(configs.getConfig(db,c.id));
+  assert.equal(requests.at(-1).headers.authorization,'Bearer test-token');
+  const updated=response();
+  routes.update({params:{id:c.id},body:{api_key:''}},updated);
+  assert.equal(updated.code,200);
+  assert.equal(configs.getConfig(db,c.id).api_key,'');
+  db.prepare('UPDATE studio_projects SET settings=? WHERE drama_id=?').run(JSON.stringify({text:{config_id:c.id,model:'local-model',input_per_million:0,output_per_million:0}}),id);
+  const p=service.prepare(db,{},id,{kind:'refine',target:'shots:shot3',instruction:'只改运镜',revision:0});
+  const task=S.reserve(db,id,'optional-key-request',p.kind,p.target,p.input,p.snapshot,p.amount);
+  await service.execute(db,{},log,task.id);
+  assert.equal(service.task(db,task.id,id).state,'completed');
+  assert.equal(requests.at(-1).headers.authorization,undefined);
+  assert.equal(requests[0].headers.authorization,undefined);
+  assert.equal(requests[1].headers.authorization,undefined);
+  const text=await require('../src/services/aiClient').generateText(db,log,'text','hello','',{model:'local-model'});
+  assert.match(text,/缓慢推近/);
+  assert.equal(requests.at(-1).headers.authorization,undefined);
+  const invalid=response();
+  await routes.testConnection({body:{api_key:''}},invalid);
+  assert.equal(invalid.code,400);
+});
