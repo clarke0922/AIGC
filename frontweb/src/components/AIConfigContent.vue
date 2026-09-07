@@ -334,6 +334,7 @@
             <el-option label="可灵 Omni-Video（官方 api-beijing / ffir 中转，O1 全能）" value="kling_omni" />
             <el-option label="xAI Grok Imagine（官方 prompt + aspect_ratio，/v1/videos/generations）" value="xai" />
             <el-option label="MiniMax H3（官方 V2：/v2/video_generation，模型 MiniMax-H3）" value="minimax_h3" />
+            <el-option label="WalkingwithAI 自建 H3（Base URL 填 /api/v1，自动上传参考图）" value="walkingwithai" />
             <el-option label="NanoBanana" value="nano_banana" />
           </el-select>
         </el-form-item>
@@ -1556,6 +1557,8 @@ const endpointPreviewInfo = computed(() => {
       submitPath = '/v1/videos'
     } else if (proto === 'agnes' || p === 'agnes') {
       submitPath = '/videos'
+    } else if (proto === 'walkingwithai') {
+      submitPath = '/jobs'
     } else if (proto === 'minimax_h3' || p === 'minimax_h3') {
       submitPath = '/v2/video_generation'
     } else if (proto === 'xai') {
@@ -1595,6 +1598,8 @@ const endpointPreviewInfo = computed(() => {
       queryPath = '/v1/videos/{taskId}'
     } else if (proto === 'agnes' || p === 'agnes') {
       queryPath = '/videos/{taskId}'
+    } else if (proto === 'walkingwithai') {
+      queryPath = '/jobs/{job_id}'
     } else if (proto === 'minimax_h3' || p === 'minimax_h3') {
       queryPath = '/v2/query/video_generation/{taskId}'
     } else if (proto === 'xai') {
@@ -2001,6 +2006,7 @@ async function openTest(row) {
       api_key: row.api_key,
       model: Array.isArray(row.model) ? row.model[0] : row.model,
       provider: row.provider,
+      api_protocol: row.api_protocol,
       endpoint: row.endpoint,
       service_type: row.service_type,
       settings: row.settings

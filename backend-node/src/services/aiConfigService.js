@@ -249,6 +249,8 @@ function rowToConfig(r) {
  * @returns Promise<void> 成功 resolve，失败 reject(error)
  */
 async function testConnection(opts) {
+  const walkingWithAi = require('./walkingWithAiClient');
+  if (walkingWithAi.isConfig(opts)) return walkingWithAi.testConnection(opts);
   const base = (opts.base_url || '').replace(/\/$/, '');
   if (!base) throw new Error('base_url 必填');
   const models = Array.isArray(opts.model) ? opts.model : opts.model != null ? [opts.model] : [];

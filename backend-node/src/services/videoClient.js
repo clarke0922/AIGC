@@ -2,6 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const aiConfigService = require('./aiConfigService');
+const walkingWithAi = require('./walkingWithAiClient');
 let sharp; try { sharp = require('sharp'); } catch (_) { sharp = null; }
 const { uploadLocalImageToProxy, uploadToImageProxy } = require('./uploadService');
 const imageClient = require('./imageClient');
@@ -3732,6 +3733,7 @@ async function callVideoApi(db, log, opts) {
   if (!config) {
     throw new Error('???????????AI ?????? video ?????????');
   }
+  if (walkingWithAi.isConfig(config)) return walkingWithAi.create(config, { ...opts, prompt });
   const model = getModelFromConfig(config, preferredModel);
   const provider = (config.provider || '').toLowerCase();
   const protocol = resolveVideoProtocol(config, preferredModel);
@@ -4122,6 +4124,7 @@ async function callVideoApi(db, log, opts) {
  * ??????????????????/ChatFire ? ???? DashScope?
  */
 async function pollVideoTask(db, log, videoGenId, taskId, config, maxAttempts = 300, intervalMs = 10000) {
+  if (walkingWithAi.isConfig(config)) return walkingWithAi.poll(config, taskId, maxAttempts, intervalMs);
   const provider = (config.provider || '').toLowerCase();
   const protocol = resolveVideoProtocol(config);
   const isDashScope = protocol === 'dashscope';

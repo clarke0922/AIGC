@@ -112,6 +112,7 @@ function testConnection(log) {
         api_key: body.api_key,
         model: body.model,
         provider: body.provider,
+        api_protocol: body.api_protocol,
         endpoint: body.endpoint,
         service_type: body.service_type,
         settings: body.settings,
