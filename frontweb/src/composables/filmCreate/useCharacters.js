@@ -59,7 +59,6 @@ export function useCharacters(deps) {
   const addCharRefImage = ref(null)   // { dataUrl, filename }
   const keepCharRefPriority = ref(false)
   const addCharRefFileInput = ref(null)
-  let editCharacterPollTimer = null
 
   // ── 角色生成状态 ──────────────────────────────────────
   /** 仅当前集「提取角色」进行中时为 true（按集隔离，切集不误显示 loading） */
@@ -135,6 +134,7 @@ export function useCharacters(deps) {
   }
 
   function openAddCharacter() {
+    editCharacterPromptGenerating.value = false
     editCharacterForm.value = {
       name: '',
       role: '',
@@ -146,15 +146,8 @@ export function useCharacters(deps) {
     showEditCharacter.value = true
   }
 
-  function stopCharacterPromptPoll() {
-    if (editCharacterPollTimer) {
-      clearInterval(editCharacterPollTimer)
-      editCharacterPollTimer = null
-    }
-  }
-
   function editCharacter(char) {
-    stopCharacterPromptPoll()
+    editCharacterPromptGenerating.value = false
     editCharacterForm.value = {
       id: char.id,
       name: char.name || '',
@@ -170,30 +163,6 @@ export function useCharacters(deps) {
       stages: char.stages ? (typeof char.stages === 'string' ? char.stages : JSON.stringify(char.stages, null, 2)) : '',
     }
     showEditCharacter.value = true
-    if (!char.polished_prompt && char.id && (char.appearance || char.description)) {
-      editCharacterPromptGenerating.value = true
-      let elapsed = 0
-      editCharacterPollTimer = setInterval(async () => {
-        elapsed += 3
-        try {
-          const res = await characterAPI.get(char.id)
-          const prompt = res?.character?.polished_prompt
-          if (prompt) {
-            if (editCharacterForm.value?.id === char.id) {
-              editCharacterForm.value.polished_prompt = prompt
-            }
-            stopCharacterPromptPoll()
-            editCharacterPromptGenerating.value = false
-          } else if (elapsed >= 60) {
-            stopCharacterPromptPoll()
-            editCharacterPromptGenerating.value = false
-          }
-        } catch (_) {
-          stopCharacterPromptPoll()
-          editCharacterPromptGenerating.value = false
-        }
-      }, 3000)
-    }
   }
 
   async function saveCharRefImageIfAny(characterId) {
@@ -268,19 +237,19 @@ export function useCharacters(deps) {
 
   async function doGenerateCharacterPrompt() {
     const form = editCharacterForm.value
-    if (!form?.id) return
+    if (!form?.id || editCharacterPromptGenerating.value) return
     editCharacterPromptGenerating.value = true
     try {
       const res = await characterAPI.generatePrompt(form.id, undefined, undefined, keepCharRefPriority.value)
-      if (res?.polished_prompt) {
-        form.polished_prompt = res.polished_prompt
-        ElMessage.success('提示词已生成')
-        await loadDrama()
-      }
+      if (editCharacterForm.value !== form || !showEditCharacter.value) return
+      if (!res?.polished_prompt?.trim()) throw new Error('未返回新的提示词，请重试')
+      form.polished_prompt = res.polished_prompt
+      ElMessage.success('提示词已生成')
+      await loadDrama()
     } catch (e) {
-      ElMessage.error(e.message || '生成提示词失败')
+      if (editCharacterForm.value === form && showEditCharacter.value) ElMessage.error(e.message || '生成提示词失败')
     } finally {
-      editCharacterPromptGenerating.value = false
+      if (editCharacterForm.value === form) editCharacterPromptGenerating.value = false
     }
   }
 
@@ -315,7 +284,6 @@ export function useCharacters(deps) {
 
   function onCloseCharDialog() {
     showEditCharacter.value = false
-    stopCharacterPromptPoll()
     editCharacterPromptGenerating.value = false
     addCharRefImage.value = null
   }
@@ -839,7 +807,6 @@ export function useCharacters(deps) {
     charRoleLabel,
     onGenerateCharacters,
     openAddCharacter,
-    stopCharacterPromptPoll,
     editCharacter,
     saveCharRefImageIfAny,
     submitEditCharacter,
