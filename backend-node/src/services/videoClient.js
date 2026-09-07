@@ -1016,6 +1016,10 @@ function buildAgnesPollUrl(config, pollId) {
     return base + ep;
   }
 
+  const model = getModelFromConfig(config);
+  if (isAgnes25Model(model)) {
+    return `${root}/agnesapi?video_id=${encodeURIComponent(id)}&model_name=${encodeURIComponent(model)}`;
+  }
   return `${root}/v1/videos/${encodeURIComponent(id)}`;
 }
 
@@ -2497,12 +2501,17 @@ function buildAgnesVideoImagePayload({ useOmniReference, resolvedRefs, firstReso
   return { strategy: 'text_only' };
 }
 
+function isAgnes25Model(model) {
+  return /^agnes-video-2\.5(?:-flash)?$/i.test(model || '');
+}
+
 async function callAgnesVideoApi(db, config, log, opts) {
   const {
     prompt,
     model,
     duration,
     aspect_ratio,
+    resolution,
     image_url,
     first_frame_url,
     last_frame_url,
@@ -2521,7 +2530,16 @@ async function callAgnesVideoApi(db, config, log, opts) {
   const dims = agnesDimensionsFromAspectRatio(aspect_ratio || '16:9');
   const numFrames = agnesSnapNumFrames(duration, frameRate);
 
-  const body = {
+  const is25 = isAgnes25Model(model);
+  const isFlash = /-flash$/i.test(model || '');
+  const body = is25 ? {
+    model,
+    prompt: prompt || '',
+    seconds: String(Math.max(4, Math.min(12, Math.round(Number(duration) || 5)))),
+    size: isFlash ? '720P' : String(resolution || '720P').toUpperCase(),
+    aspect_ratio: aspect_ratio || '16:9',
+    mode: 'text',
+  } : {
     model: model || 'agnes-video-v2.0',
     prompt: prompt || '',
     width: dims.width,
@@ -2576,11 +2594,20 @@ async function callAgnesVideoApi(db, config, log, opts) {
     firstResolved,
     lastResolved,
   });
-  if (imagePayload.image != null) {
-    body.image = imagePayload.image;
-  }
-  if (imagePayload.extra_body) {
-    body.extra_body = imagePayload.extra_body;
+  if (is25) {
+    if (useOmniReference) {
+      const maxImages = isFlash ? 5 : 9;
+      if (resolvedRefs.length > maxImages) return { error: `Agnes ${model} 最多支持 ${maxImages} 张参考图，请减少参考图后重试` };
+      body.mode = 'reference';
+      body.images = resolvedRefs;
+    } else if (firstResolved || lastResolved) {
+      body.mode = 'keyframe';
+      if (firstResolved) body.first_frame = firstResolved;
+      if (lastResolved) body.last_frame = lastResolved;
+    }
+  } else {
+    if (imagePayload.image != null) body.image = imagePayload.image;
+    if (imagePayload.extra_body) body.extra_body = imagePayload.extra_body;
   }
 
   log.info('[Agnes] 参考图输入（解析前）', {
@@ -2605,6 +2632,9 @@ async function callAgnesVideoApi(db, config, log, opts) {
     width: body.width,
     height: body.height,
     num_frames: body.num_frames,
+    seconds: body.seconds,
+    mode: body.mode,
+    size: body.size,
     frame_rate: body.frame_rate,
     duration_sec: duration,
     aspect_ratio: aspect_ratio || '16:9',
@@ -2629,7 +2659,7 @@ async function callAgnesVideoApi(db, config, log, opts) {
     let errMsg = 'Agnes 视频请求失败: ' + res.status;
     try {
       const errJson = JSON.parse(raw);
-      const msg = errJson.error?.message || errJson.message || errJson.error;
+      const msg = errJson.error?.message || errJson.message || errJson.detail || errJson.error;
       if (msg) errMsg += ' - ' + (typeof msg === 'string' ? msg : JSON.stringify(msg).slice(0, 200));
     } catch (_) {
       if (raw) errMsg += ' - ' + raw.slice(0, 200);
@@ -2650,7 +2680,7 @@ async function callAgnesVideoApi(db, config, log, opts) {
     return { video_url: directUrl };
   }
 
-  const taskId = data.id || data.task_id || data.data?.id || data.data?.task_id;
+  const taskId = (is25 && (data.video_id || data.data?.video_id)) || data.id || data.task_id || data.data?.id || data.data?.task_id;
   if (taskId) {
     log.info('[Agnes] 返回 task_id', { task_id: taskId, status: data.status, video_gen_id });
     return { task_id: String(taskId), status: data.status || 'processing' };
@@ -3912,6 +3942,7 @@ async function callVideoApi(db, log, opts) {
       model,
       duration: opts.duration,
       aspect_ratio,
+      resolution,
       image_url: opts.image_url,
       first_frame_url: opts.first_frame_url,
       last_frame_url: opts.last_frame_url,
