@@ -1,6 +1,6 @@
 /**
  * TTS 语音合成服务
- * 支持多种 TTS 接口：minimax、edge-tts（本地）、通用 HTTP
+ * 支持多种 TTS 接口：MiniMax、豆包语音合成 2.0、OpenAI 兼容接口
  */
 const https = require('https');
 const http = require('http');
@@ -136,7 +136,9 @@ async function synthesize(db, log, { text, storyboard_id, config, storage_base, 
   const finalSpeed = speed || ttsSettings.speed || 1.0;
   let audioBuffer;
 
-  if (provider === 'minimax') {
+  if (provider === 'doubao_tts') {
+    audioBuffer = await require('./doubaoTtsClient').synthesizeAudio(ttsConfig, { text, voice_id: voiceId, speed: finalSpeed });
+  } else if (provider === 'minimax') {
     audioBuffer = await synthesizeWithMinimax(
       text,
       voiceId || 'female-shaonv',
@@ -145,7 +147,6 @@ async function synthesize(db, log, { text, storyboard_id, config, storage_base, 
       ttsModel || 'speech-02-hd'
     );
   } else if (provider === 'openai' || ttsConfig.base_url) {
-    console.log('==c sxy synthesizeWithOpenai', text, voiceId, ttsConfig.api_key, ttsConfig.base_url, ttsModel, finalSpeed);
     audioBuffer = await synthesizeWithOpenai(
       text,
       voiceId || 'alloy',
@@ -155,7 +156,7 @@ async function synthesize(db, log, { text, storyboard_id, config, storage_base, 
       finalSpeed
     );
   } else {
-    throw new Error(`不支持的 TTS provider: ${provider}，目前支持 openai、minimax`);
+    throw new Error(`不支持的 TTS provider: ${provider}，目前支持 openai、minimax、doubao_tts`);
   }
 
   // 保存到本地

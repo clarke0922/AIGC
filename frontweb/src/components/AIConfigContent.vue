@@ -625,13 +625,16 @@ input_reference = (图片文件，可选)</pre>
         </template>
         <!-- TTS 专属字段：声音 ID 和 MiniMax Group ID -->
         <template v-if="form.service_type === 'tts'">
+          <el-alert v-if="form.provider === 'doubao_tts'" type="info" :closable="false" style="margin-bottom:16px">
+            豆包语音合成 2.0：使用<a href="https://console.volcengine.com/speech/new/setting/apikeys" target="_blank" rel="noopener noreferrer">语音控制台 API Key</a>，模型填 seed-tts-2.0，音色选择已开通的 2.0 音色。此处支持新版 API Key 鉴权；“测试”会合成短句并消耗少量语音额度。
+          </el-alert>
           <el-form-item>
             <template #label>
               <span class="form-label-tip">声音 ID
                 <el-tooltip placement="top" popper-class="cfg-tip-popper">
                   <template #content>
                     <div class="cfg-tip-content">
-                      TTS 合成使用的音色 ID。<br>
+                      TTS 合成使用的音色 ID。豆包 2.0 请使用语音控制台 Speaker ID，如 zh_female_vv_uranus_bigtts。<br>
                       <b>MiniMax 常用音色：</b><br>
                       female-shaonv（少女）、female-chengshu（成熟）<br>
                       male-qingxin（清新男）、male-zhicheng（知城男）<br>
@@ -650,21 +653,25 @@ input_reference = (图片文件，可选)</pre>
               placeholder="选择或输入声音 ID"
               style="width: 100%"
             >
-              <el-option-group label="MiniMax 女声">
+              <el-option-group v-if="form.provider === 'doubao_tts'" label="豆包语音 2.0">
+                <el-option label="Vivi（豆包 2.0 女声）" value="zh_female_vv_uranus_bigtts" />
+              </el-option-group>
+              <el-option-group v-if="form.provider !== 'doubao_tts'" label="MiniMax 女声">
                 <el-option label="female-shaonv（少女）" value="female-shaonv" />
                 <el-option label="female-chengshu（成熟）" value="female-chengshu" />
                 <el-option label="female-tianmei（甜美）" value="female-tianmei" />
                 <el-option label="audiobook_female_2（有声书）" value="audiobook_female_2" />
               </el-option-group>
-              <el-option-group label="MiniMax 男声">
+              <el-option-group v-if="form.provider !== 'doubao_tts'" label="MiniMax 男声">
                 <el-option label="male-qingxin（清新）" value="male-qingxin" />
                 <el-option label="male-zhicheng（知城）" value="male-zhicheng" />
                 <el-option label="audiobook_male_1（有声书）" value="audiobook_male_1" />
               </el-option-group>
             </el-select>
-            <p class="field-tip">MiniMax 必填；不填默认 female-shaonv。</p>
+            <p v-if="form.provider === 'doubao_tts'" class="field-tip">可输入控制台其他 2.0 音色的 Speaker ID；留空默认 zh_female_vv_uranus_bigtts。无需 Group ID。</p>
+            <p v-else class="field-tip">MiniMax 不填默认 female-shaonv。</p>
           </el-form-item>
-          <el-form-item>
+          <el-form-item v-if="form.provider === 'minimax'">
             <template #label>
               <span class="form-label-tip">Group ID
                 <el-tooltip placement="top" popper-class="cfg-tip-popper">
@@ -1356,6 +1363,7 @@ const providerConfigs = {
     { id: 'agnes', name: 'Agnes AI', models: ['agnes-video-v2.0'] },
   ],
   tts: [
+    { id: 'doubao_tts', name: '豆包语音合成模型 2.0', models: ['seed-tts-2.0'] },
     { id: 'minimax', name: 'MiniMax T2A', models: ['speech-02-hd', 'speech-02-turbo'] },
   ],
   jimeng2_character_auth: [
@@ -1397,6 +1405,7 @@ function getBaseUrlForProvider(provider) {
   if (!provider) return ''
   const p = String(provider).toLowerCase()
   if (p === 'gemini' || p === 'google') return 'https://generativelanguage.googleapis.com'
+  if (p === 'doubao_tts') return 'https://openspeech.bytedance.com'
   if (p === 'minimax_h3') return 'https://api.minimaxi.com'
   if (p === 'minimax') return 'https://api.minimaxi.com/v1'
   if (p === 'volces' || p === 'volcengine') return 'https://ark.cn-beijing.volces.com/api/v3'
@@ -1502,7 +1511,9 @@ const endpointPreviewInfo = computed(() => {
   if (service_type === 'text') {
     submitPath = '/chat/completions'
   } else if (service_type === 'tts') {
-    if (p === 'minimax') {
+    if (p === 'doubao_tts') {
+      submitPath = '/api/v3/tts/unidirectional/sse'
+    } else if (p === 'minimax') {
       submitPath = '/t2a_v2?GroupId={group_id}'
     } else {
       submitPath = endpoint || '/tts'
@@ -1645,6 +1656,11 @@ function onProviderChange(providerId) {
   form.value.base_url = getBaseUrlForProvider(providerId)
   form.value.modelText = (p.models || []).join('\n')
   form.value.default_model = (p.models && p.models[0]) || ''
+  if (st === 'tts') {
+    form.value.voice_id = providerId === 'doubao_tts' ? 'zh_female_vv_uranus_bigtts' : ''
+    form.value.group_id = ''
+    form.value.endpoint = ''
+  }
   if (providerId === 'deepseek') {
     form.value.deepseek_thinking = 'disabled'
     form.value.deepseek_reasoning_effort = 'high'

@@ -301,6 +301,10 @@ async function testConnection(opts) {
 
   // --- TTS 语音合成 ---
   if (serviceType === 'tts') {
+    if (provider === 'doubao_tts') {
+      await require('./doubaoTtsClient').synthesizeAudio(opts, { text: '你好，语音合成测试。' });
+      return;
+    }
     // MiniMax T2A：用 /v1/models 或直接对 chat 端点做轻量探针
     const ttsBase = base.includes('minimaxi.com') || base.includes('minimax') ? base : base;
     // 尝试调用一个极简的 MiniMax T2A 请求（1 字，验证 key 合法性）

@@ -7,6 +7,7 @@ const client=require('../src/services/walkingWithAiClient');
 const log={info(){},warn(){},error(){}};
 
 test('self-hosted H3 uses the configured /api/v1 prefix, uploads assets, submits jobs and resolves output URLs',async t=>{
+  t.mock.method(require('../src/services/minimaxH3PromptService'), 'generate', async (_db, _log, opts) => opts.prompt);
   const requests=[], uploads=[];
   let status='completed';
   const server=http.createServer(async(req,res)=>{

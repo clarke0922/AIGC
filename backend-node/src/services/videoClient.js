@@ -3732,12 +3732,17 @@ async function callVideoApi(db, log, opts) {
     storage_local_path,
     video_gen_id
   } = opts;
-  const prompt = enforceNoOnScreenText(rawPrompt);
+  let prompt = enforceNoOnScreenText(rawPrompt);
   const config = opts.config_override || getDefaultVideoConfig(db, preferredModel);
   if (!config) {
     throw new Error('???????????AI ?????? video ?????????');
   }
-  if (walkingWithAi.isConfig(config)) return walkingWithAi.create(config, { ...opts, prompt });
+  const selfHostedH3 = walkingWithAi.isConfig(config);
+  if (selfHostedH3 || resolveVideoProtocol(config, preferredModel) === 'minimax_h3') {
+    prompt = await require('./minimaxH3PromptService').generate(db, log, opts, selfHostedH3);
+    if (db && video_gen_id) db.prepare('UPDATE video_generations SET prompt = ? WHERE id = ?').run(prompt, video_gen_id);
+  }
+  if (selfHostedH3) return walkingWithAi.create(config, { ...opts, prompt });
   const model = getModelFromConfig(config, preferredModel);
   const provider = (config.provider || '').toLowerCase();
   const protocol = resolveVideoProtocol(config, preferredModel);
