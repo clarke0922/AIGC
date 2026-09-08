@@ -1,21 +1,25 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { listModels } = require('../src/services/volcModelCatalog');
-for (const [plan, path] of [['agent', 'plan'], ['coding', 'coding']]) {
-  test(`${plan} discovery uses its own endpoint and preserves plan aliases`, async () => {
-    assert.deepEqual(await listModels('key', async (url, options) => {
-      assert.equal(url, `https://ark.cn-beijing.volces.com/api/${path}/v3/models`);
-      assert.equal(options.headers.Authorization, 'Bearer key');
-      assert.equal(options.redirect, 'error');
-      return { ok: true, json: async () => ({ data: [{ id: 'deepseek-v4-flash' }] }) };
-    }, plan), ['deepseek-v4-flash']);
+for (const plan of ['agent', 'coding']) {
+  test(`${plan} reference catalog never calls the unsupported models endpoint or requires a key`, async () => {
+    let calls = 0;
+    const models = await listModels('', async () => { calls++; return { ok: false, status: 404 }; }, plan);
+    assert.equal(calls, 0);
+    assert.ok(models.includes('deepseek-v4-flash'));
+    assert.equal(models.some(id => /seedream|seedance/.test(id)), plan === 'agent');
+    models.length = 0;
+    assert.ok((await listModels('', undefined, plan)).length > 0);
   });
 }
-test('invalid plans never forward credentials; denied plans never retry ordinary billing', async () => {
-  let calls = 0;
-  const denied = async () => { calls++; return { ok: false, status: 401 }; };
-  await assert.rejects(listModels('key', denied, 'https://evil.example'), /套餐类型/);
-  assert.equal(calls, 0);
-  await assert.rejects(listModels('key', denied, 'agent'), /401.*套餐.*API Key/);
-  assert.equal(calls, 1);
+test('invalid plans never forward credentials', async () => {
+  await assert.rejects(listModels('key', async () => assert.fail('credentials forwarded'), 'https://evil.example'), /套餐类型/);
+});
+test('route labels plan suggestions as reference data, not account discovery', async () => {
+  const handler = require('../src/routes/aiConfig')({}, {}, {}).discoverVolcModels;
+  let body;
+  const res = { json(value) { body = value; return this; }, status() { return this; } };
+  await handler({body: {plan: 'agent'}}, res);
+  assert.equal(body.data.source, 'reference');
+  assert.ok(body.data.models.includes('deepseek-v4-flash'));
 });

@@ -934,8 +934,9 @@ input_reference = (图片文件，可选)</pre>
             clearable
           />
         </el-form-item>
-        <el-button :loading="volcLoading" :disabled="!oneKeyVolcKey.trim()" @click="discoverVolcModels">查询供应商 Model ID</el-button>
-        <p class="one-key-note">查询只读取模型目录，不生成内容。列表不代表已开通权限；分类按名称辅助识别，请核对用途。单个候选自动选择，多个候选请手动选；也可输入控制台调用 ID。</p>
+        <el-button :loading="volcLoading" :disabled="volcPlan === 'standard' && !oneKeyVolcKey.trim()" @click="discoverVolcModels">{{ volcPlan === 'standard' ? '查询供应商 Model ID' : '加载套餐模型参考列表' }}</el-button>
+        <p v-if="volcPlan !== 'standard'" class="one-key-note">套餐不通过 /models 查询。本列表来自官方公开资料（2026-09-08），仅供选择，未验证 Key 或账号权限，也不保证覆盖当前套餐全部模型。请选择控制台已开通的 ID，或手动输入；保存后可用配置行的“测试”验证。</p>
+        <p v-else class="one-key-note">查询只读取模型目录，不生成内容。列表不代表已开通权限；分类按名称辅助识别，请核对用途。单个候选自动选择，多个候选请手动选；也可输入控制台调用 ID。</p>
         <el-form-item v-for="cfg in activeVolcConfigs" :key="cfg.service_type" :label="{text:'文本/对话',image:'文本生成图片',storyboard_image:'分镜图片生成',video:'视频生成'}[cfg.service_type]" label-width="120px">
           <el-select v-model="volcSelected[cfg.service_type]" filterable allow-create placeholder="选择或输入完整 Model ID" style="width:100%">
             <el-option-group label="按用途推荐">
@@ -1276,17 +1277,18 @@ const oneKeyVolcVisible = ref(false)
 const oneKeyVolcKey = ref('')
 const oneKeyVolcSaving = ref(false)
 const volcModels = ref([]), volcSelected = ref({}), volcLoading = ref(false)
-let volcCatalogKey = ''
-function resetVolcModels() { volcModels.value=[];volcSelected.value={};volcCatalogKey='' }
+function resetVolcModels() { volcModels.value=[];volcSelected.value={} }
 async function discoverVolcModels() {
-  const key=oneKeyVolcKey.value.trim();if(!key || volcLoading.value || key===volcCatalogKey)return
+  const key=oneKeyVolcKey.value.trim();if((volcPlan.value==='standard' && !key) || volcLoading.value)return
   volcLoading.value=true
   try {
     const plan=volcPlan.value
-    const result=await aiAPI.discoverVolcModels(key, plan)
+    const result=await aiAPI.discoverVolcModels(plan === 'standard' ? key : '', plan)
     if(key!==oneKeyVolcKey.value.trim() || plan!==volcPlan.value)return
-    volcModels.value=result.models;volcCatalogKey=key
-    volcSelected.value=Object.fromEntries(activeVolcConfigs.value.map(c=>[c.service_type,singleModel(result.models,c.service_type)]))
+    volcModels.value=result.models
+    if (result.source === 'provider' || plan === 'standard') {
+      volcSelected.value=Object.fromEntries(activeVolcConfigs.value.map(c=>[c.service_type,volcSelected.value[c.service_type] || singleModel(result.models,c.service_type)]))
+    }
   } catch (_) { /* request interceptor displays the query error; manual IDs remain available. */ }
   finally {volcLoading.value=false}
 }

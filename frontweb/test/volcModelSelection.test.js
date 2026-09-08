@@ -46,3 +46,22 @@ test('one-click Agent Plan save preserves manual IDs and skips unfilled media se
   assert.equal(visible.value, false)
   assert.equal(saving.value, false)
 })
+
+test('loading plan references sends no key, preserves manual IDs and does not auto-select suggestions', async () => {
+  const component = readFileSync(new URL('../src/components/AIConfigContent.vue', import.meta.url), 'utf8')
+  const body = component.split('async function discoverVolcModels() {')[1].split('\nconst oneKeyAgnesVisible')[0].trim().replace(/\}$/, '')
+  const load = new (Object.getPrototypeOf(async function(){}).constructor)(
+    'oneKeyVolcKey', 'volcPlan', 'volcLoading', 'aiAPI', 'volcModels', 'volcSelected', 'activeVolcConfigs', 'singleModel', body)
+  const models = {value: []}, selected = {value: {text:'custom-plan-id'}}, loading = {value:false}
+  let calls = 0
+  await load({value:'private-key'}, {value:'agent'}, loading, {discoverVolcModels: async (key, plan) => {
+    calls++
+    assert.equal(key, '')
+    assert.equal(plan, 'agent')
+    return {source:'reference',models:['deepseek-v4-flash','doubao-seedream-5.0-lite']}
+  }}, models, selected, {value:[{service_type:'text'},{service_type:'image'}]}, singleModel)
+  assert.equal(calls, 1)
+  assert.equal(models.value.length, 2)
+  assert.deepEqual(selected.value, {text:'custom-plan-id'})
+  assert.equal(loading.value, false)
+})

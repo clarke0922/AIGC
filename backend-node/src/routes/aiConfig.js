@@ -184,7 +184,9 @@ module.exports = function aiConfigRoutes(db, log, cfg) {
   return {
     discoverVolcModels: async (req, res) => {
       try {
-        response.success(res, { models: await require('../services/volcModelCatalog').listModels(req.body?.api_key, undefined, req.body?.plan ?? 'standard') });
+        const plan = req.body?.plan ?? 'standard';
+        const models = await require('../services/volcModelCatalog').listModels(req.body?.api_key, undefined, plan);
+        response.success(res, { models, source: plan === 'standard' ? 'provider' : 'reference' });
       } catch (e) {
         response.badRequest(res, e.name === 'TimeoutError' ? '模型列表查询超时，请重试或手动填写调用 ID' : e.message);
       }
