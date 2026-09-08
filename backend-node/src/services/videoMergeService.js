@@ -1,7 +1,9 @@
 const path = require('path');
 const fs = require('fs');
+const { spawnSync } = require('child_process');
 const { getFfmpegPath, getFfprobePath, hasLocalFfmpeg } = require('../utils/ffmpegPath');
 const storageLayout = require('./storageLayout');
+const { ffprobeDurationSec } = require('./mergedEpisodePostProcess');
 
 function list(db, query) {
   let sql = 'FROM video_merges WHERE deleted_at IS NULL';
@@ -136,7 +138,6 @@ function runFfmpegConcat(localPaths, outputPath, log) {
       return `file '${normalized.replace(/'/g, "'\\''")}'`;
     });
     fs.writeFileSync(listFile, lines.join('\n'), 'utf8');
-    const { spawnSync } = require('child_process');
     const args = [
       '-f', 'concat',
       '-safe', '0',
@@ -158,6 +159,80 @@ function runFfmpegConcat(localPaths, outputPath, log) {
   } finally {
     try { if (fs.existsSync(listFile)) fs.unlinkSync(listFile); } catch (_) {}
   }
+}
+
+/** 读取视频流基础参数（codec/宽高/帧率/像素格式），读不到返回 null */
+function probeVideoStream(filePath) {
+  const r = spawnSync(
+    getFfprobePath(),
+    ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=codec_name,width,height,r_frame_rate,pix_fmt', '-of', 'json', filePath],
+    { encoding: 'utf8', maxBuffer: 2 * 1024 * 1024 }
+  );
+  if (r.status !== 0) return null;
+  try {
+    const s = JSON.parse(r.stdout || '{}').streams?.[0];
+    if (!s || !s.width || !s.height) return null;
+    return { codec: s.codec_name, width: s.width, height: s.height, fps: s.r_frame_rate, pix_fmt: s.pix_fmt };
+  } catch (_) {
+    return null;
+  }
+}
+
+/** 将单段视频统一转码为首镜的分辨率/帧率/像素格式，保证 concat -c copy 拼接安全 */
+function transcodeToUniform(srcPath, destPath, target, log, index) {
+  const vf = `scale=${target.width}:${target.height}:force_original_aspect_ratio=decrease,pad=${target.width}:${target.height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${target.fps}`;
+  const args = [
+    '-y', '-i', srcPath,
+    '-vf', vf,
+    '-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-pix_fmt', 'yuv420p',
+    '-c:a', 'aac', '-ar', '44100', '-ac', '2',
+    '-movflags', '+faststart',
+    destPath,
+  ];
+  const r = spawnSync(getFfmpegPath(), args, { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
+  if (r.status !== 0) {
+    log.warn('Video merge: uniform transcode failed', { index, stderr: r.stderr?.slice(-500) });
+    return false;
+  }
+  return fs.existsSync(destPath);
+}
+
+/** 归一化所有片段到首镜参数，返回新的本地路径数组（含需清理的临时转码文件） */
+function normalizeClips(localPaths, tempDir, log) {
+  const first = probeVideoStream(localPaths[0]);
+  if (!first) return { ok: false, error: '无法读取首个镜头视频参数' };
+  const target = {
+    width: first.width,
+    height: first.height,
+    fps: extractFrameRateNum(first.fps) || 24,
+  };
+  const normalized = [];
+  for (let i = 0; i < localPaths.length; i++) {
+    const p = localPaths[i];
+    const info = probeVideoStream(p);
+    const sameParams = info
+      && info.codec === first.codec
+      && info.width === first.width
+      && info.height === first.height
+      && info.pix_fmt === first.pix_fmt
+      && Math.abs((extractFrameRateNum(info.fps) || 24) - target.fps) < 0.01;
+    if (sameParams) {
+      normalized.push(p);
+      continue;
+    }
+    const dest = path.join(tempDir, `norm_${Date.now()}_${i}.mp4`);
+    if (!transcodeToUniform(p, dest, target, log, i)) {
+      return { ok: false, error: `第${i + 1}镜统一转码失败` };
+    }
+    normalized.push(dest);
+  }
+  return { ok: true, paths: normalized };
+}
+
+function extractFrameRateNum(rFrameRate) {
+  const [a, b] = String(rFrameRate || '').split('/').map(Number);
+  if (b > 0 && a > 0) return a / b;
+  return null;
 }
 
 /**
@@ -208,7 +283,7 @@ async function processVideoMerge(db, log, mergeId, baseUrl) {
       log
     );
     if (p) {
-      const duration = require('./mergedEpisodePostProcess').ffprobeDurationSec(p);
+      const duration = ffprobeDurationSec(p);
       if (duration == null) mergeError = `第${i + 1}镜无法读取实际时长`;
       else {
         scenes[i].duration = duration;
@@ -230,20 +305,28 @@ async function processVideoMerge(db, log, mergeId, baseUrl) {
 
   let mergedRelativePath = null;
   if (!mergeError && localPaths.length === scenes.length && ffmpegAvailable && localPaths.length <= 100) {
-    const projectSubdir = storageLayout.getProjectStorageSubdir(db, r.drama_id);
-    const sub = projectSubdir && String(projectSubdir).trim();
-    const mergedDir = sub
-      ? path.join(storageRoot, sub, 'videos', 'merged')
-      : path.join(storageRoot, 'videos', 'merged');
-    if (!fs.existsSync(mergedDir)) fs.mkdirSync(mergedDir, { recursive: true });
-    const outputFileName = `merged_${Date.now()}.mp4`;
-    const outputPath = path.join(mergedDir, outputFileName);
-    const ok = runFfmpegConcat(localPaths, outputPath, log);
-    if (ok && fs.existsSync(outputPath)) {
-      mergedRelativePath = sub
-        ? path.join(sub, 'videos', 'merged', outputFileName).replace(/\\/g, '/')
-        : path.join('videos', 'merged', outputFileName).replace(/\\/g, '/');
-      log.info('Video merge completed (ffmpeg)', { merge_id: mergeId, episode_id: episodeId, output: mergedRelativePath });
+    // AI 分镜视频编码参数（分辨率/帧率/编码器/像素格式）不一致时，concat + stream copy
+    // 会输出只能播放第一段的损坏成片；先把全部片段统一转码到首镜参数再拼接。
+    const norm = normalizeClips(localPaths, tempDir, log);
+    if (!norm.ok) {
+      mergeError = norm.error;
+    } else {
+      for (const p of norm.paths) if (p.startsWith(tempDir)) toCleanup.push(p);
+      const projectSubdir = storageLayout.getProjectStorageSubdir(db, r.drama_id);
+      const sub = projectSubdir && String(projectSubdir).trim();
+      const mergedDir = sub
+        ? path.join(storageRoot, sub, 'videos', 'merged')
+        : path.join(storageRoot, 'videos', 'merged');
+      if (!fs.existsSync(mergedDir)) fs.mkdirSync(mergedDir, { recursive: true });
+      const outputFileName = `merged_${Date.now()}.mp4`;
+      const outputPath = path.join(mergedDir, outputFileName);
+      const ok = runFfmpegConcat(norm.paths, outputPath, log);
+      if (ok && fs.existsSync(outputPath)) {
+        mergedRelativePath = sub
+          ? path.join(sub, 'videos', 'merged', outputFileName).replace(/\\/g, '/')
+          : path.join('videos', 'merged', outputFileName).replace(/\\/g, '/');
+        log.info('Video merge completed (ffmpeg)', { merge_id: mergeId, episode_id: episodeId, output: mergedRelativePath });
+      }
     }
   }
 
@@ -307,4 +390,6 @@ module.exports = {
   create,
   deleteById,
   processVideoMerge,
+  normalizeClips,
+  extractFrameRateNum,
 };
