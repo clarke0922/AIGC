@@ -42,7 +42,21 @@ function styleTextEnForImage(cfg) {
   return (cfg?.style?.default_style_en || cfg?.style?.default_style || '').trim();
 }
 
+function getCharacterStageRule(cfg) {
+  return isEnglish(cfg)
+    ? `
+[Life-stage character assets — required]
+Extract one object per person per life stage actually depicted in the script (including depicted flashbacks). If Lin appears in junior high, senior high and university, output THREE objects, never one combined profile. Add life_stage (e.g. "junior high", "senior high", "university"); name must be "Lin（junior high）", etc. If only one stage is depicted, keep the original name and set life_stage to "". Keep the same person's stable facial identity across stages, but describe ONLY the corresponding age, hairstyle, clothing, appearance and background in each object. Repeated scenes in the same stage are one asset. Do not create stages merely mentioned in dialogue, hypothetical futures or another person's history. Before returning, check every depicted person-stage pair is present exactly once.`
+    : `
+【人生阶段角色拆分：必须遵守】
+按“人物＋剧本实际呈现的人生阶段”提取独立角色资产（包含实际呈现的回忆画面）。例如林晓分别出现在初中、高中、大学三个阶段，必须返回三个对象，不能合成一个跨年龄角色。每个对象增加 life_stage 字段（如“初中”“高中”“大学”），name 分别为“林晓（初中）”“林晓（高中）”“林晓（大学）”。只有一个阶段出场的人物保持原名，life_stage 填空字符串。各阶段保留同一人物的稳定五官特征，但 appearance、description 仅描述该阶段的年龄、发型、服装、外貌与背景，不得将多个阶段的形象混写。相同人物同一阶段在多个场景重复出现只提取一次。不得因为对白提及、假设未来或其他人物的经历就虚构阶段。输出前逐一核对剧本中实际呈现的每个“人物＋阶段”，确保无遗漏、无合并、无重复。`;
+}
+
 function getCharacterExtractionPrompt(cfg) {
+  return getCharacterExtractionBody(cfg) + getCharacterStageRule(cfg);
+}
+
+function getCharacterExtractionBody(cfg) {
   const style = styleTextForCfgLang(cfg);
   const imageRatio = cfg?.style?.default_image_ratio || '16:9';
   if (isEnglish(cfg)) {
@@ -384,7 +398,7 @@ function formatUserPrompt(cfg, key, ...args) {
       character_list_label: '【Available Character List】',
       scene_list_label: '【Extracted Scene Backgrounds】',
       task_instruction: 'Break down the novel script into storyboard shots based on **independent action units**.',
-      character_constraint: '**Important** — characters field rules:\n1. Only use character IDs (numbers) from the above character list. Do not invent IDs.\n2. Only include characters who **physically appear and act** in this specific shot. Do NOT list characters who are merely mentioned, offscreen, or appear in the overall scene but not in this shot.\n3. The number of characters listed must match who is described in the action/dialogue fields. If the action only describes one person, list only that one character.',
+      character_constraint: '**Important** — characters field rules:\n1. Only use character IDs (numbers) from the above character list. Do not invent IDs.\n2. Only include characters who **physically appear and act** in this specific shot. Do NOT list characters who are merely mentioned, offscreen, or appear in the overall scene but not in this shot.\n3. The number of characters listed must match who is described in the action/dialogue fields. If the action only describes one person, list only that one character.\n4. If the same person has separate life-stage assets, choose only the ID for the stage depicted in this shot (including flashbacks); never substitute another stage or include all stages.',
       scene_constraint: '**Important**: In the scene_id field, select the most matching background ID (number) from the above background list. If no suitable background exists, use null.',
       prop_list_label: '【Available Prop List】',
       prop_constraint: '**Important** — props field rules:\n1. Only use prop IDs (numbers) from the above prop list. Do not invent IDs.\n2. Only include props that are **visually present and actively used or prominently featured** in this specific shot.\n3. If no props from the list appear in the shot, use an empty array [].',
@@ -412,7 +426,7 @@ function formatUserPrompt(cfg, key, ...args) {
       character_list_label: '【本剧可用角色列表】',
       scene_list_label: '【本剧已提取的场景背景列表】',
       task_instruction: '将小说剧本按**独立动作单元**拆解为分镜头方案。',
-      character_constraint: '**重要** — characters字段填写规则：\n1. 只能使用上述角色列表中的角色ID（数字），不得自创ID。\n2. 只填写在**本镜头中实际出现并有具体行为**的角色。不要把"提到的"、"画面外的"、或整个场景里有但本镜头动作中未描述的角色也列进去。\n3. characters数量必须与action/dialogue中实际描写的人物数量一致。如果action只描述了一个人的动作，characters里就只填那一个人的ID。',
+      character_constraint: '**重要** — characters字段填写规则：\n1. 只能使用上述角色列表中的角色ID（数字），不得自创ID。\n2. 只填写在**本镜头中实际出现并有具体行为**的角色。不要把"提到的"、"画面外的"、或整个场景里有但本镜头动作中未描述的角色也列进去。\n3. characters数量必须与action/dialogue中实际描写的人物数量一致。如果action只描述了一个人的动作，characters里就只填那一个人的ID。\n4. 同一人物有多个阶段角色时，根据本镜头的时间阶段（包括回忆）仅选择对应阶段的角色ID；不得混用初中、高中、大学等不同阶段，也不得将各阶段全部加入同一镜头。',
       scene_constraint: '**重要**：在scene_id字段中，必须从上述背景列表中选择最匹配的背景ID（数字）。如果没有合适的背景，则填null。',
       prop_list_label: '【本集可用道具列表】',
       prop_constraint: '**重要** — props字段填写规则：\n1. 只能使用上述道具列表中的道具ID（数字），不得自创ID。\n2. 只填写在**本镜头中视觉上出现并被使用或显著展示**的道具。\n3. 如果本镜头中没有列表中的道具出现，则填空数组[]。',
@@ -1009,7 +1023,7 @@ function getLockedSuffix(key) {
     case 'storyboard_system':
       return '\n\n**重要：必须只返回纯JSON数组，不要包含任何markdown代码块、说明文字或其他内容。直接以 [ 开头，以 ] 结尾。**\n\n【重要提示】\n- 镜头数量必须与剧本中的独立动作数量匹配（不允许合并或减少）\n- 每个镜头必须有明确的动作和结果\n- 景别选择必须符合叙事节奏（不要连续使用同一景别）\n- 情绪强度必须准确反映剧本氛围变化\n- 【角色一致性】每个镜头的characters列表必须与该镜头action/dialogue中实际描写的人物严格一致，不得把（在场景中存在但本镜头动作未涉及）的角色列入';
     case 'character_extraction':
-      return '\n- **风格要求**：[当前剧集风格]\n- **图片比例**：[当前比例]\n输出格式：\n**重要：必须只返回纯JSON数组，不要包含任何markdown代码块、说明文字或其他内容。直接以 [ 开头，以 ] 结尾。**\n每个元素是一个角色对象，包含上述字段。';
+      return getCharacterStageRule() + '\n- **风格要求**：[当前剧集风格]\n- **图片比例**：[当前比例]\n输出格式：\n**重要：必须只返回纯JSON数组，不要包含任何markdown代码块、说明文字或其他内容。直接以 [ 开头，以 ] 结尾。**\n每个元素是一个角色对象，包含上述字段。';
     case 'scene_extraction':
       return '\n5. **风格要求**：[当前剧集风格]\n   - **图片比例**：[当前比例]\n\n【输出格式】\n**重要：必须只返回纯JSON数组，不要包含任何markdown代码块。直接以 [ 开头，以 ] 结尾。**\n每个元素包含：location（地点）, time（时间）, prompt（完整的中文图片生成提示词，纯背景，明确说明无人物）。';
     case 'prop_extraction':

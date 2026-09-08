@@ -122,10 +122,18 @@ async function processCharacterGeneration(db, cfg, log, taskID, req) {
   }
 
   const characters = [];
+  const seenNames = new Set();
 
   for (const char of result) {
-    const name = (char.name || '').trim();
-    if (!name) continue;
+    const baseName = typeof char.name === 'string' ? char.name.trim() : '';
+    if (!baseName) continue;
+    const stage = typeof char.life_stage === 'string' ? char.life_stage.trim() : '';
+    const suffix = baseName.match(/[（(]([^（）()]+)[）)]$/);
+    const name = stage
+      ? `${suffix && suffix[1].trim() === stage ? baseName.slice(0, suffix.index).trim() : baseName}（${stage}）`
+      : baseName;
+    if (seenNames.has(name)) continue;
+    seenNames.add(name);
     const existing = db.prepare('SELECT id, name FROM characters WHERE drama_id = ? AND name = ? AND deleted_at IS NULL').get(dramaId, name);
     if (existing) {
       characters.push({
