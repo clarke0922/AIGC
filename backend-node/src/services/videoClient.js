@@ -76,6 +76,10 @@ function resolveVideoProtocol(config, modelHint) {
   if ((!explicit || protocol === 'openai') && (provider === 'minimax_h3' || isMinimaxH3Model(modelCand))) {
     protocol = 'minimax_h3';
   }
+  // Seedance 2.x 家族 + 自动推断为经典火山协议时，升级为全能多图参考（与前端 canUseUniversalOmniVideoApi 的 SD2 兜底一致）
+  if (!explicit && protocol === 'volcengine' && (provider === 'volces' || provider === 'volcengine' || provider === 'volc') && isSeedance2FamilyModel(modelCand)) {
+    protocol = 'volcengine_omni';
+  }
   return protocol;
 }
 
@@ -4519,6 +4523,7 @@ module.exports = {
   formatVideoPostBodyForLog,
   enforceNoOnScreenText,
   isSeedance2FamilyModel,
+  resolveVideoProtocol,
   normalizeVolcengineDuration,
   isMinimaxH3Model,
   getMinimaxApiRoot,

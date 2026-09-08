@@ -6244,6 +6244,11 @@ function canUseUniversalOmniVideoApi(cfg) {
   if (proto === 'agnes' || provider === 'agnes' || /agnes-video/.test(model)) {
     return true
   }
+  // 兜底：火山 Seedance 2.x（doubao-seedance-2-0-* 等）即使接口规范未显式配为 volcengine_omni，
+  // 也按多图参考处理（与后端 resolveVideoProtocol 的 SD2 升级一致）
+  if ((!proto || proto === 'volcengine') && (provider === 'volces' || provider === 'volcengine' || provider === 'volc') && isSeedance2VideoModel(model)) {
+    return true
+  }
   return false
 }
 
