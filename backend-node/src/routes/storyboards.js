@@ -565,7 +565,7 @@ function routes(db, log) {
           log,
           'text',
           userPrompt,
-          promptI18n.getUniversalOmniSegmentPrompt(),
+          promptI18n.getUniversalOmniSegmentPrompt({ app: { language: built.language } }),
           { scene_key: 'image_polish', max_tokens: 2400, temperature: 0.28 }
         );
         if (!out || String(out).trim().length < 20) {
@@ -615,7 +615,7 @@ function routes(db, log) {
           log,
           'text',
           userPrompt,
-          promptI18n.getUniversalOmniSegmentPrompt(),
+          promptI18n.getUniversalOmniSegmentPrompt({ app: { language: built.language } }),
           {
             scene_key: 'image_polish',
             max_tokens: 2400,
@@ -737,7 +737,7 @@ function routes(db, log) {
           log,
           'text',
           polishUserPrompt,
-          promptI18n.getUniversalOmniPolishPrompt(),
+          promptI18n.getUniversalOmniPolishPrompt({ app: { language: built.language } }),
           {
             scene_key: 'image_polish',
             max_tokens: 4096,

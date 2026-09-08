@@ -72,13 +72,15 @@ async function processBackgroundExtraction(db, cfg, log, taskID, episodeId, mode
 
   // 合并风格：显式 style 参数优先（一般为前端传来的英文 prompt）；否则用剧集 metadata 中的完整提示词
   let effectiveCfg = cfg;
+  let projectLanguage = null;
   try {
     const dramaRow = db.prepare('SELECT style, metadata FROM dramas WHERE id = ? AND deleted_at IS NULL').get(episode.drama_id);
     const { mergeCfgStyleWithDrama } = require('../utils/dramaStyleMerge');
     const paramStyle = (style && String(style).trim()) || '';
-    let next = { ...cfg, style: { ...(cfg?.style || {}) } };
+    let next = mergeCfgStyleWithDrama(cfg, dramaRow);
     if (dramaRow?.metadata) {
       const meta = typeof dramaRow.metadata === 'string' ? JSON.parse(dramaRow.metadata) : dramaRow.metadata;
+      projectLanguage = normalizeLanguage(meta?.generation_language);
       if (meta?.aspect_ratio) next.style.default_image_ratio = meta.aspect_ratio;
     }
     if (paramStyle) {
@@ -98,7 +100,7 @@ async function processBackgroundExtraction(db, cfg, log, taskID, episodeId, mode
   const requestedLanguage = normalizeLanguage(language);
   const configuredLanguage = normalizeLanguage(promptI18n.getLanguage(effectiveCfg));
   let effectiveLanguage = requestedLanguage || configuredLanguage;
-  if (!requestedLanguage && effectiveLanguage === 'en' && hasChinese(scriptContent)) {
+  if (!requestedLanguage && !projectLanguage && effectiveLanguage === 'en' && hasChinese(scriptContent)) {
     effectiveLanguage = 'zh';
   }
   const cfgForPrompt = withLanguage(effectiveCfg, effectiveLanguage);

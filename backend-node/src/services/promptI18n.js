@@ -304,7 +304,7 @@ Field "universal_segment_text" is a **multi-line string** (use \\n in JSON). Str
 Line 1: 画面风格和类型: 真人写实, 电影风格, 高清画质, <short style from project>
 Line 2: 生成一个由以下M个分镜组成的视频. (M integer 1–8)
 Line 3 (copy verbatim): ${DEFAULT_LINE3}
-Lines 4..(3+M): 分镜k： Tk秒: <cinematic Chinese prose for that slice; camera motion chain; light; emotion>
+Lines 4..(3+M): 分镜k： Tk秒: <cinematic English prose for that slice; camera motion chain; light; emotion>
 Sum(T1..TM) MUST equal this shot's JSON "duration" seconds exactly.
 
 Reference tokens: @图片1 = scene/environment only; @图片2+ = characters in characters[] order; then props if any.
@@ -1043,7 +1043,7 @@ function getLockedSuffix(key) {
  * 场景单图提示词生成：文本AI将场景描述转化为单图场景参考图提示词（非四宫格）
  */
 function getScenePolishPromptSingle(cfg) {
-  const style = styleTextZhForPolish(cfg);
+  const style = isEnglish(cfg) ? styleTextEnForImage(cfg) : styleTextZhForPolish(cfg);
   return `# 场景单图参考图生成器
 
 ## 你的身份
@@ -1067,7 +1067,9 @@ function getScenePolishPromptSingle(cfg) {
 - **不要**写四宫格顺序、无人物、无文字水印等与版面/负面清单相关的长段说明（生图 API 会统一注入）；只写场景可视信息与完整画面内容
 
 ## 输出要求
-直接输出一段连贯的场景描述文字，不要分段落标题，不要出现「第X格」字样。`;
+直接输出一段连贯的场景描述文字，不要分段落标题，不要出现「第X格」字样。
+
+${isEnglish(cfg) ? "OUTPUT LANGUAGE: Write all descriptions and section headings in English; translate the template headings above. Preserve character names and required technical labels." : "输出语言：所有描述使用中文，保留角色名及要求的技术标签。"}`;
 
 }
 
@@ -1075,7 +1077,7 @@ function getScenePolishPromptSingle(cfg) {
  * 场景四视图提示词生成：文本AI将场景描述转化为四格场景参考图提示词
  */
 function getScenePolishPrompt(cfg) {
-  const style = styleTextZhForPolish(cfg);
+  const style = isEnglish(cfg) ? styleTextEnForImage(cfg) : styleTextZhForPolish(cfg);
   return `# 场景四视图参考图生成器
 
 ## 你的身份
@@ -1135,7 +1137,9 @@ function getScenePolishPrompt(cfg) {
 标志性元素的材质/纹理/色彩；特写与景深；该元素的指示意义
 
 【第4格-角度变体】
-与第1格不同的机位高度与视角（如微俯/高俯/仰视/斜角）；保持与前三格相同的光线/时段/天气；展示空间纵深与建筑结构关系`;
+与第1格不同的机位高度与视角（如微俯/高俯/仰视/斜角）；保持与前三格相同的光线/时段/天气；展示空间纵深与建筑结构关系
+
+${isEnglish(cfg) ? "OUTPUT LANGUAGE: Write all descriptions and section headings in English; translate the template headings above. Preserve character names and required technical labels." : "输出语言：所有描述使用中文，保留角色名及要求的技术标签。"}`;
 }
 
 /**
@@ -1165,7 +1169,7 @@ Follow ART STYLE / 画风 block at the start of the user message if present.`;
  * 角色参考表提示词生成：文本AI将角色外貌描述转化为工业分栏角色参考表绘图提示词（非四宫格）
  */
 function getRolePolishPrompt(cfg) {
-  const style = styleTextZhForPolish(cfg);
+  const style = isEnglish(cfg) ? styleTextEnForImage(cfg) : styleTextZhForPolish(cfg);
   return `# 工业角色参考表标准提示词生成器
 
 ## 你的身份
@@ -1250,7 +1254,9 @@ function getRolePolishPrompt(cfg) {
 若干短英文或中英标签列举材质关键词（非长段落）
 
 【SIGNATURE PROP / EQUIPMENT DETAIL｜可选】
-仅当有原文依据时写道具局部特写说明`;
+仅当有原文依据时写道具局部特写说明
+
+${isEnglish(cfg) ? "OUTPUT LANGUAGE: Write all descriptions and section headings in English; translate the template headings above. Preserve character names and required technical labels." : "输出语言：所有描述使用中文，保留角色名及要求的技术标签。"}`;
 }
 
 /**
@@ -1363,9 +1369,9 @@ CONTEXT_PREV / CONTEXT_NEXT: 上下文（仅用于情绪参考）
 /**
  * 全能模式（可灵 Omni-Video、火山即梦 Seedance 2.0 多图参考等）：模板 + 仅用 @图片1/@图片2…（与参考图顺序一致，不用 @姓名）
  */
-function getUniversalOmniSegmentPrompt() {
-  const specZh = getUniversalOmniMultiBeatFormatSpec({ language: 'zh' });
-  return `You write the main prompt for multi-reference video (e.g. Kling Omni-Video, Volcengine Seedance omnivideo) "片段描述" in Chinese.
+function getUniversalOmniSegmentPrompt(cfg) {
+  const specZh = getUniversalOmniMultiBeatFormatSpec(cfg);
+  return `You write the main prompt for multi-reference video (e.g. Kling Omni-Video, Volcengine Seedance omnivideo) "片段描述" in ${isEnglish(cfg) ? 'English' : 'Chinese'}. Keep the fixed Chinese format labels and reference tokens unchanged.
 
 The USER message includes MULTI_BEAT_OUTPUT, TOTAL_CLIP_SECONDS, SHOT_PACING_AND_POSITION, EPISODE_SCRIPT, NEIGHBOR_* detail, IMAGE_SLOT_MAP, LINE3_REQUIRED, STYLE_HINT, and storyboard fields.
 
@@ -1385,7 +1391,7 @@ Line 2 — exactly (M must match count of 分镜k lines):
 Line 3 — copy LINE3_REQUIRED from the USER message verbatim.
 
 Lines 4 through (3+M) — for each k, one full line:
-分镜k： Tk秒: <Rich cinematic Chinese prose for this slice only: camera motion chain (≥2 moves when Tk≥3s), @图片N bindings per IMAGE_SLOT_MAP, light, emotion. Dialogue: …说："verbatim" or …："verbatim". No speech: 无对白。 Narration: 旁白（画面无声）："verbatim". Avoid static snapshot captions.>
+分镜k： Tk秒: <Rich cinematic ${isEnglish(cfg) ? 'English' : 'Chinese'} prose for this slice only: camera motion chain (≥2 moves when Tk≥3s), @图片N bindings per IMAGE_SLOT_MAP, light, emotion. Dialogue: …说："verbatim" or …："verbatim". No speech: 无对白。 Narration: 旁白（画面无声）："verbatim". Avoid static snapshot captions.>
 
 DIALOGUE — CRITICAL (when USER message contains DIALOGUE_VERBATIM):
 - Every line listed under「必须逐字出现在输出中的台词」MUST appear in some子分镜 line inside 「」, character-for-character (only spacing around @图片N may vary).
@@ -1413,17 +1419,17 @@ If CURRENT_UNIVERSAL_SEGMENT is non-empty, preserve narrative beats but rewrite 
 /**
  * 全能片段「润色」模式：在 getUniversalOmniSegmentPrompt 的硬性格式与参考图规则之上，强化短剧叙事与上下文一致。
  */
-function getUniversalOmniPolishPrompt() {
-  return `${getUniversalOmniSegmentPrompt()}
+function getUniversalOmniPolishPrompt(cfg) {
+  return `${getUniversalOmniSegmentPrompt(cfg)}
 
 ADDITIONAL_POLISH_MODE (short drama enhancement — still MUST obey MULTI_BEAT_OUTPUT, TOTAL_CLIP_SECONDS sum, IMAGE_SLOT_MAP, LINE3_REQUIRED above):
 - You receive FULL_EPISODE_SCRIPT plus NEIGHBOR blocks and structured fields. Use them only for **continuity** and **information completeness**; do NOT invent plot absent from SCRIPT + STORYBOARD FIELDS + CURRENT omni draft.
 - **Information parity**: every script-relevant fact must appear across the子分镜 lines (lines 4…3+M), without losing information when expanding; if the draft was an old SoulLens single-line, **rewrite** into this multi-beat block; keep the same facts and total seconds.
-- **Re-polish / anti-stagnation**: USER may click polish repeatedly on the same draft. Each response MUST deliver **substantially rephrased** Chinese on lines 1, 2 (if M changes), and all子分镜 body lines — same facts, same total seconds, same @图片 bindings, but **not** a copy-paste of CURRENT_OMNI_DRAFT except line 3 which must stay **character-identical** to LINE3_REQUIRED. If you would otherwise output nearly identical prose, deliberately vary verbs, clause order, and camera wording while preserving meaning.
+- **Re-polish / anti-stagnation**: USER may click polish repeatedly on the same draft. Each response MUST deliver **substantially rephrased** ${isEnglish(cfg) ? 'English' : 'Chinese'} on lines 1, 2 (if M changes), and all子分镜 body lines — same facts, same total seconds, same @图片 bindings, but **not** a copy-paste of CURRENT_OMNI_DRAFT except line 3 which must stay **character-identical** to LINE3_REQUIRED. If you would otherwise output nearly identical prose, deliberately vary verbs, clause order, and camera wording while preserving meaning.
 - **Short drama rhythm**: vertical-drama density — stakes, micro-expressions, blocking, camera motion; distribute across beats when M>1.
 - **Inner monologue & dialogue**: brief 心想 / 「」 only when supported by DIALOGUE / NARRATION / SCRIPT / draft. When DIALOGUE_VERBATIM is present, **every** listed line must remain verbatim in 「」 after polish; rephrase motion/camera text freely but **not** quoted dialogue.
 - **Neighbors**: align entry/exit with NEIGHBOR_* ; no redundant retelling of the previous shot.
-- Language: Chinese for子分镜 prose; lines 1–3 format as in base prompt; M must match line 2 and match the count of「分镜k」lines.`;
+- Language: ${isEnglish(cfg) ? 'English' : 'Chinese'} for子分镜 prose; lines 1–3 format as in base prompt; M must match line 2 and match the count of「分镜k」lines.`;
 }
 
 /**

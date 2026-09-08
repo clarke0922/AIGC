@@ -35,6 +35,7 @@
           画布模式
         </el-button>
         <div class="header-actions">
+          <el-button @click="openProjectSettings">项目设置</el-button>
           <el-button class="btn-theme" :title="isDark ? '切换到浅色模式' : '切换到暗色模式'" @click="toggleTheme">
             <el-icon><Sunny v-if="isDark" /><Moon v-else /></el-icon>
             {{ isDark ? '浅色' : '暗色' }}
@@ -373,7 +374,7 @@
             <el-option label="12秒/段" :value="12" />
             <el-option label="15秒/段" :value="15" />
           </el-select>
-          <el-select v-model="scriptLanguage" placeholder="分镜语言" clearable style="width: 105px">
+          <el-select v-model="scriptLanguage" placeholder="输出语言" style="width: 105px" @change="() => saveProjectSettings(false)">
             <el-option label="中文" value="zh" />
             <el-option label="英文" value="en" />
           </el-select>
@@ -2614,6 +2615,24 @@
     </el-dialog>
 
     <!-- AI 配置弹窗（不跳转，避免本页内容丢失） -->
+    <el-dialog v-model="showProjectSettings" title="项目设置" width="520px" append-to-body>
+      <el-form label-width="90px">
+        <el-form-item label="生成风格">
+          <StylePickerButton v-model="projectSettingsDraft.style" v-model:custom-prompt="projectSettingsDraft.customPrompt" :options="generationStyleOptions" />
+        </el-form-item>
+        <el-form-item label="输出语言">
+          <el-select v-model="projectSettingsDraft.language">
+            <el-option label="中文" value="zh" />
+            <el-option label="英文" value="en" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <p>用于本项目后续的剧本、角色、场景、道具与分镜生成。已有内容不会自动改写。</p>
+      <template #footer>
+        <el-button @click="showProjectSettings = false">取消</el-button>
+        <el-button type="primary" :loading="projectSettingsSaving" @click="saveProjectSettingsDialog">保存</el-button>
+      </template>
+    </el-dialog>
     <el-dialog v-model="showAiConfigDialog" title="AI 配置" width="90%" destroy-on-close class="ai-config-dialog">
       <AIConfigContent v-if="showAiConfigDialog" />
     </el-dialog>
@@ -2733,6 +2752,9 @@ const selectedEpisodeId = ref(null)
 /** 保存剧本后用于恢复选中集（后端重插后 id 会变，用 episode_number 匹配） */
 const savedCurrentEpisodeNumber = ref(1)
 const scriptLanguage = ref('zh')
+const showProjectSettings = ref(false)
+const projectSettingsSaving = ref(false)
+const projectSettingsDraft = ref({ style: '', customPrompt: '', language: 'zh' })
 const scriptStoryboardStyle = ref('')
 const scriptGenerating = ref(false)
 const isStoryGenRunning = computed(() => {
@@ -4587,6 +4609,7 @@ async function loadDrama() {
     storyInput.value = (d.description || '').toString().trim()
     storyStyle.value = (d.metadata && d.metadata.story_style) ? d.metadata.story_style : ''
     storyType.value = d.genre || ''
+    scriptLanguage.value = d.metadata?.generation_language === 'en' ? 'en' : 'zh'
     generationStyle.value = d.style || ''
     if ((d.style || '') === CUSTOM_STYLE_VALUE) {
       customStylePrompt.value = (d.metadata?.style_prompt_zh || d.metadata?.style_prompt_en || '').toString()
@@ -4898,6 +4921,7 @@ async function saveScriptToBackend(content) {
       style: generationStyle.value || undefined,
       metadata: {
         ...projectStylePromptMetadata(),
+        generation_language: scriptLanguage.value,
         story_style: storyStyle.value || undefined,
         aspect_ratio: projectAspectRatio.value || '16:9',
       },
@@ -4936,6 +4960,7 @@ async function saveScriptToBackend(content) {
         style: generationStyle.value || undefined,
         metadata: {
           ...projectStylePromptMetadata(),
+          generation_language: scriptLanguage.value,
           story_style: storyStyle.value || undefined,
           aspect_ratio: projectAspectRatio.value || '16:9',
         },
@@ -4974,6 +4999,7 @@ async function saveScriptToBackend(content) {
       style: generationStyle.value || undefined,
       metadata: {
         ...projectStylePromptMetadata(),
+        generation_language: scriptLanguage.value,
         story_style: storyStyle.value || undefined,
         aspect_ratio: projectAspectRatio.value || '16:9',
       },
@@ -4983,6 +5009,33 @@ async function saveScriptToBackend(content) {
   return { created: false }
 }
 
+function openProjectSettings() {
+  projectSettingsDraft.value = { style: generationStyle.value, customPrompt: customStylePrompt.value, language: scriptLanguage.value }
+  showProjectSettings.value = true
+}
+
+async function saveProjectSettingsDialog() {
+  projectSettingsSaving.value = true
+  try {
+    const draft = projectSettingsDraft.value
+    const metadata = { ...stylePromptMetadataForSave(draft.style, draft.customPrompt), generation_language: draft.language }
+    if (store.dramaId) {
+      await dramaAPI.saveOutline(store.dramaId, { style: draft.style, metadata })
+      store.drama.metadata = { ...store.drama.metadata, ...metadata }
+      store.drama.style = draft.style
+    }
+    generationStyle.value = draft.style
+    customStylePrompt.value = draft.customPrompt
+    scriptLanguage.value = draft.language
+    showProjectSettings.value = false
+    ElMessage.success(store.dramaId ? '项目设置已保存' : '设置已应用，创建项目时保存')
+  } catch (e) {
+    ElMessage.error(e.message || '项目设置保存失败')
+  } finally {
+    projectSettingsSaving.value = false
+  }
+}
+
 /**
  * @param {boolean} includeGenerationStyle - 仅在选择「画面风格」为 true：写入 dramas.style 与 style_prompt_*。
  * 其它项目设置改为 false，避免界面未刷新时仍用旧的 generationStyle 覆盖外部已更新的画风（如直接调 API PUT outline）。
@@ -4990,6 +5043,7 @@ async function saveScriptToBackend(content) {
 async function saveProjectSettings(includeGenerationStyle = false) {
   if (!store.dramaId) return
   const metadata = {
+    generation_language: scriptLanguage.value,
     story_style: storyStyle.value || undefined,
     aspect_ratio: projectAspectRatio.value || '16:9',
     video_clip_duration: videoClipDuration.value || 5,
@@ -5021,6 +5075,7 @@ async function onGenerateStory() {
     scriptTitle: scriptTitle.value,
     generationStyle: generationStyle.value,
     customStylePrompt: customStylePrompt.value,
+    generationLanguage: scriptLanguage.value,
     projectAspectRatio: projectAspectRatio.value,
     store,
     router,

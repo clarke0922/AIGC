@@ -4,6 +4,7 @@ const promptI18n = require('./promptI18n');
 const taskService = require('./taskService');
 const dramaService = require('./dramaService');
 const { safeParseAIJSON } = require('../utils/safeJson');
+const { mergeCfgStyleWithDrama, parseDramaMetadata } = require('../utils/dramaStyleMerge');
 const loadConfig = require('../config').loadConfig;
 
 async function generateStory(db, log, body) {
@@ -11,7 +12,11 @@ async function generateStory(db, log, body) {
   if (!premise) {
     throw new Error('请提供故事梗概');
   }
-  const cfg = loadConfig();
+  const drama = body.drama_id ? db.prepare('SELECT style, metadata FROM dramas WHERE id = ? AND deleted_at IS NULL').get(body.drama_id) : null;
+  const cfg = mergeCfgStyleWithDrama(loadConfig(), {
+    style: body.drama_style || drama?.style,
+    metadata: { ...parseDramaMetadata(drama), ...parseDramaMetadata({ metadata: body.metadata }) },
+  });
   const style = body.style || body.genre || null;
   const type = body.type || null;
   const episodeCount = Math.max(1, Math.floor(Number(body.episode_count) || 1));

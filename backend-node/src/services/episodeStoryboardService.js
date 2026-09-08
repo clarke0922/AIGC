@@ -1103,7 +1103,7 @@ async function processStoryboardGeneration(db, log, cfg, taskId, episodeId, mode
 }
 
 function generateStoryboard(db, log, episodeId, model, style, storyboardCount, videoDuration, aspectRatio, includeNarration, universalOmni) {
-  const cfg = loadConfig();
+  let cfg = loadConfig();
   const episode = db.prepare(
     'SELECT id, script_content, description, drama_id FROM episodes WHERE id = ? AND deleted_at IS NULL'
   ).get(Number(episodeId));
@@ -1113,7 +1113,8 @@ function generateStoryboard(db, log, episodeId, model, style, storyboardCount, v
 
   // 获取剧集风格和比例（如果未指定，则从 drama metadata / style 中获取完整提示词）
   const drama = db.prepare('SELECT style, metadata FROM dramas WHERE id = ?').get(episode.drama_id);
-  const { resolvedStreamStyleFromDrama } = require('../utils/dramaStyleMerge');
+  const { resolvedStreamStyleFromDrama, mergeCfgStyleWithDrama } = require('../utils/dramaStyleMerge');
+  cfg = mergeCfgStyleWithDrama(cfg, drama);
   const finalStyle = resolvedStreamStyleFromDrama(style, drama);
 
   // 图片比例 + 每镜时长：优先用传入值，再从 drama.metadata 读，最后兜底全局配置
@@ -1337,11 +1338,12 @@ function rebuildVideoPromptForStoryboard(db, log, storyboardId) {
   if (!row) return null;
 
   const loadConfig = require('../config').loadConfig;
-  const cfg = loadConfig();
+  let cfg = loadConfig();
   const drama = row.drama_id
     ? db.prepare('SELECT style, metadata FROM dramas WHERE id = ? AND deleted_at IS NULL').get(row.drama_id)
     : null;
-  const { resolvedStreamStyleFromDrama } = require('../utils/dramaStyleMerge');
+  const { resolvedStreamStyleFromDrama, mergeCfgStyleWithDrama } = require('../utils/dramaStyleMerge');
+  cfg = mergeCfgStyleWithDrama(cfg, drama);
   const finalStyle = resolvedStreamStyleFromDrama('', drama) || cfg?.style?.default_style || '';
 
   let dramaAspectRatio = null;

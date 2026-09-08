@@ -30,6 +30,7 @@ function buildUniversalSegmentUserPromptBundle(db, sbId, reqBody, opts = {}) {
     }
   } catch (_) {}
 
+  let language = 'zh';
   let styleZh = '';
   let styleEn = '';
   try {
@@ -37,6 +38,7 @@ function buildUniversalSegmentUserPromptBundle(db, sbId, reqBody, opts = {}) {
     const { mergeCfgStyleWithDrama } = require('../utils/dramaStyleMerge');
     let cfg = loadConfig();
     cfg = mergeCfgStyleWithDrama(cfg, dramaRow || {});
+    language = cfg?.app?.language === 'en' ? 'en' : 'zh';
     styleEn = (cfg?.style?.default_style_en || cfg?.style?.default_style || '').trim();
     styleZh = (cfg?.style?.default_style_zh || '').trim();
   } catch (_) {}
@@ -472,6 +474,7 @@ function buildUniversalSegmentUserPromptBundle(db, sbId, reqBody, opts = {}) {
   return {
     ok: true,
     userPrompt,
+    language,
     durationLabel,
     durationSec,
     sbId,

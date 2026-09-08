@@ -74,7 +74,9 @@ function mergeCfgStyleWithDrama(cfg, dramaRow) {
       base.default_style = legacy;
     }
   }
-  return { ...cfg, style: expandStyleSlotIfPresetKey(base) };
+  const language = parseDramaMetadata(dramaRow)?.generation_language;
+  const app = ['zh', 'en'].includes(language) ? { ...cfg?.app, language } : cfg?.app;
+  return { ...cfg, app, style: expandStyleSlotIfPresetKey(base) };
 }
 
 /**
