@@ -157,36 +157,55 @@ function postJSONStream(url, headers, body, silenceTimeoutMs = 60000, onProgress
       let accumulated = '';
       let sseBuffer = '';
       let firstToken = true;
+      let finishReason = null;
+      let reasoningChars = 0;
       resetSilenceTimer();
-
+      // Decode across chunk boundaries, including multi-byte Chinese characters.
+      res.setEncoding('utf8');
+      const consumeLine = (line) => {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data:')) return;
+        const data = trimmed.slice(5).trim();
+        if (data === '[DONE]') return;
+        let evt;
+        try { evt = JSON.parse(data); } catch (_) { return; }
+        const choice = evt.choices?.[0];
+        if (choice?.finish_reason) finishReason = choice.finish_reason;
+        const reasoning = choice?.delta?.reasoning_content;
+        if (typeof reasoning === 'string') reasoningChars += reasoning.length;
+        const delta = choice?.delta?.content;
+        if (typeof delta === 'string' && delta) {
+          if (firstToken) {
+            firstToken = false;
+            if (onProgress) onProgress(0, 'first_token', '');
+          }
+          accumulated += delta;
+          if (onProgress) onProgress(accumulated.length, null, accumulated);
+        }
+      };
       res.on('data', (chunk) => {
         resetSilenceTimer();
-        sseBuffer += chunk.toString('utf-8');
-        // 按行解析 SSE
+        sseBuffer += chunk;
         const lines = sseBuffer.split('\n');
-        sseBuffer = lines.pop(); // 保留不完整的最后一行
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith('data:')) continue;
-          const data = trimmed.slice(5).trim();
-          if (data === '[DONE]') continue;
-          try {
-            const evt = JSON.parse(data);
-            const delta = evt.choices?.[0]?.delta?.content;
-            if (delta) {
-              if (firstToken) {
-                firstToken = false;
-                if (onProgress) onProgress(0, 'first_token', '');
-              }
-              accumulated += delta;
-              if (onProgress) onProgress(accumulated.length, null, accumulated);
-            }
-          } catch (_) { /* 忽略无法解析的行 */ }
-        }
+        sseBuffer = lines.pop();
+        for (const line of lines) consumeLine(line);
       });
 
       res.on('end', () => {
         clearTimeout(silenceTimer);
+        // Some compatible providers omit the newline after their final SSE event.
+        if (sseBuffer.trim()) consumeLine(sseBuffer);
+        if (!accumulated.trim()) {
+          if (finishReason === 'length') {
+            return reject(new Error(`AI 输出额度耗尽（max_tokens=${body.max_tokens ?? '默认'}），尚未生成正文；请提高输出上限或使用非推理模型`));
+          }
+          if (finishReason === 'content_filter') {
+            return reject(new Error('AI 正文被供应商内容审核拦截，请检查剧本内容'));
+          }
+          if (reasoningChars > 0) {
+            return reject(new Error('AI 仅返回推理过程，未返回正文；请提高输出上限或使用非推理模型'));
+          }
+        }
         resolve({ status: statusCode, body: accumulated });
       });
       res.on('error', (e) => { clearTimeout(silenceTimer); reject(e); });

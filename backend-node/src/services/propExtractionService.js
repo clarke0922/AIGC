@@ -49,7 +49,9 @@ async function processPropExtraction(db, log, taskId, episodeId) {
   try {
     response = await aiClient.generateText(db, log, 'text', prompt, systemPrompt, {
       scene_key: 'prop_extraction',
-      max_tokens: 2000,
+      // 推理模型的思考也占输出预算；2000 tokens 可能在输出 JSON 前耗尽。
+      max_tokens: 8192,
+      min_max_tokens: 8192,
       temperature: 0.3,
     });
   } catch (err) {
@@ -61,7 +63,8 @@ async function processPropExtraction(db, log, taskId, episodeId) {
   let extractedProps = [];
   try {
     const parsed = safeParseAIJSON(response, log);
-    extractedProps = extractFirstArray(parsed) || [];
+    extractedProps = extractFirstArray(parsed);
+    if (!Array.isArray(extractedProps)) throw new Error('未返回道具数组');
   } catch (_) {
     taskService.updateTaskError(db, taskId, '解析 AI 返回的 JSON 失败');
     return;
