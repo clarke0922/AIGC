@@ -915,33 +915,19 @@ input_reference = (图片文件，可选)</pre>
       @closed="oneKeyVolcKey = ''"
     >
       <div class="one-key-help">
-        <div class="one-key-section">
-          <div class="one-key-section-title">📋 建议模型系列（实际调用 ID 由下方查询或填写）</div>
-          <ul class="one-key-list">
-            <li><b>文本/对话</b>：DeepSeek V4（调用 ID：deepseek-v4-flash-260425）— 生成故事剧本</li>
-            <li><b>文本生成图片</b>：即梦 4.5（调用 ID：doubao-seedream-4.5）— 角色/场景/道具图</li>
-            <li><b>分镜图片生成</b>：即梦 4.5（调用 ID：doubao-seedream-4.5）— 支持角色参考图</li>
-            <li><b>视频生成</b>：即梦 Seedance 1.5 Pro（调用 ID：Doubao-Seedance-1.5-pro）— 生成视频片段</li>
-          </ul>
-        </div>
-        <div class="one-key-section">
-          <div class="one-key-section-title">🔑 如何申请 API Key</div>
-          <ol class="one-key-list">
-            <li>前往火山引擎方舟控制台：<a href="https://console.volcengine.com/ark" target="_blank" class="one-key-link">console.volcengine.com/ark</a></li>
-            <li>注册/登录字节跳动火山引擎账号（新用户有免费 token 额度）</li>
-            <li>左侧菜单点击「API Key 管理」→「创建 API Key」</li>
-            <li>复制生成的 Key 填入下方</li>
-          </ol>
-          <p class="one-key-note">💡 方舟平台一个 Key 同时支持豆包文本、即梦图片与视频等所有服务</p>
-          <p class="one-key-note">⚠️ 视频生成需在控制台「开通」对应模型（即梦 Seedance）后方可使用</p>
-        </div>
+        <el-select v-model="volcPlan" :disabled="volcLoading || oneKeyVolcSaving" @change="resetVolcModels" style="width:100%" aria-label="方舟套餐类型">
+          <el-option v-for="(plan, id) in volcPlans" :key="id" :label="plan.label" :value="id" />
+        </el-select>
+        <p class="one-key-note">当前接口：{{ volcPlans[volcPlan].baseUrl }}</p>
+        <p class="one-key-note">请从<a href="https://console.volcengine.com/ark" target="_blank" class="one-key-link">方舟控制台</a>获取对应套餐的 API Key 和完整调用 ID。不同套餐的接口、Key 和模型 ID 请勿混用。</p>
+        <p v-if="volcPlan === 'coding'" class="one-key-note">Coding Plan 此处仅配置文本服务；图片和视频请使用普通方舟单独配置。</p>
+        <p v-else class="one-key-note">请填写已开通模型的调用 ID；Agent Plan 使用套餐内模型 ID。图片、分镜图和视频可留空，稍后单独配置。</p>
       </div>
       <el-form label-width="0" style="margin-top: 8px">
         <el-form-item>
           <el-input
             v-model="oneKeyVolcKey"
             @input="resetVolcModels"
-            @blur="discoverVolcModels"
             type="password"
             placeholder="请输入火山引擎（方舟）API Key"
             show-password-on="click"
@@ -950,7 +936,7 @@ input_reference = (图片文件，可选)</pre>
         </el-form-item>
         <el-button :loading="volcLoading" :disabled="!oneKeyVolcKey.trim()" @click="discoverVolcModels">查询供应商 Model ID</el-button>
         <p class="one-key-note">查询只读取模型目录，不生成内容。列表不代表已开通权限；分类按名称辅助识别，请核对用途。单个候选自动选择，多个候选请手动选；也可输入控制台调用 ID。</p>
-        <el-form-item v-for="cfg in VOLCENGINE_CONFIGS" :key="cfg.service_type" :label="{text:'文本/对话',image:'文本生成图片',storyboard_image:'分镜图片生成',video:'视频生成'}[cfg.service_type]" label-width="120px">
+        <el-form-item v-for="cfg in activeVolcConfigs" :key="cfg.service_type" :label="{text:'文本/对话',image:'文本生成图片',storyboard_image:'分镜图片生成',video:'视频生成'}[cfg.service_type]" label-width="120px">
           <el-select v-model="volcSelected[cfg.service_type]" filterable allow-create placeholder="选择或输入完整 Model ID" style="width:100%">
             <el-option-group label="按用途推荐">
               <el-option v-for="id in modelCandidates(volcModels,cfg.service_type)" :key="id" :label="id" :value="id" />
@@ -963,7 +949,7 @@ input_reference = (图片文件，可选)</pre>
       </el-form>
       <template #footer>
         <el-button @click="oneKeyVolcVisible = false">取消</el-button>
-        <el-button type="success" :loading="oneKeyVolcSaving" :disabled="!oneKeyVolcKey.trim() || volcLoading || VOLCENGINE_CONFIGS.some(c=>!volcSelected[c.service_type]?.trim())" @click="submitOneKeyVolc">
+        <el-button type="success" :loading="oneKeyVolcSaving" :disabled="!oneKeyVolcKey.trim() || volcLoading || !volcSelected.text?.trim()" @click="submitOneKeyVolc">
           确定，一键创建配置
         </el-button>
       </template>
@@ -1114,7 +1100,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, MagicStick, QuestionFilled, Download, Upload, Delete, ChatDotRound, Picture, Film, VideoCamera, Key, Microphone, Folder } from '@element-plus/icons-vue'
 import { aiAPI } from '@/api/ai'
-import { modelCandidates, singleModel } from '@/utils/volcModelSelection'
+import { modelCandidates, singleModel, volcPlans, volcPlanConfigs } from '@/utils/volcModelSelection'
 import { generationSettingsAPI } from '@/api/prompts'
 import PromptEditor from '@/components/PromptEditor.vue'
 import SceneModelMap from '@/components/SceneModelMap.vue'
@@ -1284,6 +1270,8 @@ const testError = ref('')
 const oneKeyTongyiVisible = ref(false)
 const oneKeyTongyiKey = ref('')
 const oneKeyTongyiSaving = ref(false)
+const volcPlan = ref('standard')
+const activeVolcConfigs = computed(() => volcPlanConfigs(VOLCENGINE_CONFIGS, volcPlan.value))
 const oneKeyVolcVisible = ref(false)
 const oneKeyVolcKey = ref('')
 const oneKeyVolcSaving = ref(false)
@@ -1294,10 +1282,11 @@ async function discoverVolcModels() {
   const key=oneKeyVolcKey.value.trim();if(!key || volcLoading.value || key===volcCatalogKey)return
   volcLoading.value=true
   try {
-    const result=await aiAPI.discoverVolcModels(key)
-    if(key!==oneKeyVolcKey.value.trim())return
+    const plan=volcPlan.value
+    const result=await aiAPI.discoverVolcModels(key, plan)
+    if(key!==oneKeyVolcKey.value.trim() || plan!==volcPlan.value)return
     volcModels.value=result.models;volcCatalogKey=key
-    volcSelected.value=Object.fromEntries(VOLCENGINE_CONFIGS.map(c=>[c.service_type,singleModel(result.models,c.service_type)]))
+    volcSelected.value=Object.fromEntries(activeVolcConfigs.value.map(c=>[c.service_type,singleModel(result.models,c.service_type)]))
   } catch (_) { /* request interceptor displays the query error; manual IDs remain available. */ }
   finally {volcLoading.value=false}
 }
@@ -2096,10 +2085,10 @@ function openOneKeyVolc() {
 
 async function submitOneKeyVolc() {
   const apiKey = oneKeyVolcKey.value.trim()
-  if (!apiKey || VOLCENGINE_CONFIGS.some(c=>!volcSelected.value[c.service_type]?.trim())) return
+  if (!apiKey || !volcSelected.value.text?.trim()) return
   oneKeyVolcSaving.value = true
   try {
-    for (const cfg of VOLCENGINE_CONFIGS) {
+    for (const cfg of activeVolcConfigs.value.filter(c => volcSelected.value[c.service_type]?.trim())) {
       const models = [volcSelected.value[cfg.service_type].trim()]
       await aiAPI.create({
         service_type: cfg.service_type,
@@ -2113,7 +2102,7 @@ async function submitOneKeyVolc() {
         is_default: true
       })
     }
-    ElMessage.success('已创建火山引擎文本、文本生图、分镜图、视频配置')
+    ElMessage.success('已创建所填写的火山引擎配置')
     oneKeyVolcVisible.value = false
     await loadList()
   } catch (_) {

@@ -1,8 +1,8 @@
 import request from '@/utils/request'
 
 export const aiAPI = {
-  discoverVolcModels(apiKey) {
-    return request.post('/ai-configs/volc-models', { api_key: apiKey })
+  discoverVolcModels(apiKey, plan = 'standard') {
+    return request.post('/ai-configs/volc-models', { api_key: apiKey, plan })
   },
   list(serviceType) {
     return request.get('/ai-configs', { params: serviceType ? { service_type: serviceType } : {} })
