@@ -130,7 +130,6 @@ async function resolveVideoToLocalPath(videoUrl, baseUrl, storageRoot, tempDir, 
 /** 使用 ffmpeg concat 合并多个视频文件 */
 function runFfmpegConcat(localPaths, outputPath, log) {
   const ffmpegBin = getFfmpegPath();
-  const isWin = process.platform === 'win32';
   const listFile = path.join(path.dirname(outputPath), `concat_list_${Date.now()}.txt`);
   try {
     const lines = localPaths.map((p) => {
@@ -143,6 +142,7 @@ function runFfmpegConcat(localPaths, outputPath, log) {
       '-safe', '0',
       '-i', listFile,
       '-c', 'copy',
+      '-movflags', '+faststart',
       '-y',
       outputPath,
     ];
@@ -165,26 +165,33 @@ function runFfmpegConcat(localPaths, outputPath, log) {
 function probeVideoStream(filePath) {
   const r = spawnSync(
     getFfprobePath(),
-    ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=codec_name,width,height,r_frame_rate,pix_fmt', '-of', 'json', filePath],
+    ['-v', 'error', '-show_entries', 'stream=codec_type,codec_name,width,height,r_frame_rate,pix_fmt:format=duration', '-of', 'json', filePath],
     { encoding: 'utf8', maxBuffer: 2 * 1024 * 1024 }
   );
   if (r.status !== 0) return null;
   try {
-    const s = JSON.parse(r.stdout || '{}').streams?.[0];
-    if (!s || !s.width || !s.height) return null;
-    return { codec: s.codec_name, width: s.width, height: s.height, fps: s.r_frame_rate, pix_fmt: s.pix_fmt };
+    const data = JSON.parse(r.stdout || '{}');
+    const s = data.streams?.find(s => s.codec_type === 'video');
+    const duration = Number(data.format?.duration);
+    if (!s || !s.width || !s.height || !Number.isFinite(duration) || duration <= 0) return null;
+    return { width: s.width, height: s.height, fps: s.r_frame_rate, duration, audio: data.streams.some(s => s.codec_type === 'audio') };
   } catch (_) {
     return null;
   }
 }
 
 /** 将单段视频统一转码为首镜的分辨率/帧率/像素格式，保证 concat -c copy 拼接安全 */
-function transcodeToUniform(srcPath, destPath, target, log, index) {
-  const vf = `scale=${target.width}:${target.height}:force_original_aspect_ratio=decrease,pad=${target.width}:${target.height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${target.fps}`;
+function transcodeToUniform(srcPath, destPath, target, info, log, index) {
+  const duration = Math.ceil(info.duration * target.fps) / target.fps;
+  const vf = `setpts=PTS-STARTPTS,scale=${target.width}:${target.height}:force_original_aspect_ratio=decrease,pad=${target.width}:${target.height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${target.fps},tpad=stop_mode=clone:stop_duration=${duration},trim=duration=${duration}`;
   const args = [
     '-y', '-i', srcPath,
+    ...(!info.audio ? ['-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo'] : []),
+    '-map', '0:v:0', '-map', info.audio ? '0:a:0' : '1:a:0',
     '-vf', vf,
+    '-af', `asetpts=PTS-STARTPTS,aresample=44100:async=1:first_pts=0,apad,atrim=duration=${duration}`,
     '-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-pix_fmt', 'yuv420p',
+    '-video_track_timescale', '90000',
     '-c:a', 'aac', '-ar', '44100', '-ac', '2',
     '-movflags', '+faststart',
     destPath,
@@ -202,26 +209,18 @@ function normalizeClips(localPaths, tempDir, log) {
   const first = probeVideoStream(localPaths[0]);
   if (!first) return { ok: false, error: '无法读取首个镜头视频参数' };
   const target = {
-    width: first.width,
-    height: first.height,
+    width: Math.ceil(first.width / 2) * 2,
+    height: Math.ceil(first.height / 2) * 2,
     fps: extractFrameRateNum(first.fps) || 24,
   };
   const normalized = [];
   for (let i = 0; i < localPaths.length; i++) {
     const p = localPaths[i];
     const info = probeVideoStream(p);
-    const sameParams = info
-      && info.codec === first.codec
-      && info.width === first.width
-      && info.height === first.height
-      && info.pix_fmt === first.pix_fmt
-      && Math.abs((extractFrameRateNum(info.fps) || 24) - target.fps) < 0.01;
-    if (sameParams) {
-      normalized.push(p);
-      continue;
-    }
+    if (!info) return { ok: false, error: `第${i + 1}镜无法读取视频参数` };
+    // 表面参数相同仍可能有不同音频采样率、时间基准及编码配置，首镜也必须归一化。
     const dest = path.join(tempDir, `norm_${Date.now()}_${i}.mp4`);
-    if (!transcodeToUniform(p, dest, target, log, i)) {
+    if (!transcodeToUniform(p, dest, target, info, log, i)) {
       return { ok: false, error: `第${i + 1}镜统一转码失败` };
     }
     normalized.push(dest);
@@ -312,6 +311,11 @@ async function processVideoMerge(db, log, mergeId, baseUrl) {
       mergeError = norm.error;
     } else {
       for (const p of norm.paths) if (p.startsWith(tempDir)) toCleanup.push(p);
+      totalDuration = 0;
+      for (let i = 0; i < norm.paths.length; i++) {
+        scenes[i].duration = ffprobeDurationSec(norm.paths[i]);
+        totalDuration += scenes[i].duration;
+      }
       const projectSubdir = storageLayout.getProjectStorageSubdir(db, r.drama_id);
       const sub = projectSubdir && String(projectSubdir).trim();
       const mergedDir = sub
@@ -391,5 +395,6 @@ module.exports = {
   deleteById,
   processVideoMerge,
   normalizeClips,
+  runFfmpegConcat,
   extractFrameRateNum,
 };

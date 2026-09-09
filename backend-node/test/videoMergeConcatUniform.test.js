@@ -5,9 +5,58 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { getFfmpegPath, getFfprobePath, hasLocalFfmpeg } = require('../src/utils/ffmpegPath');
-const { normalizeClips, extractFrameRateNum } = require('../src/services/videoMergeService');
+const { normalizeClips, extractFrameRateNum, runFfmpegConcat } = require('../src/services/videoMergeService');
 
 const skipNoFfmpeg = { skip: !hasLocalFfmpeg() };
+
+test('mixed audio rates, time bases and missing audio merge with continuous timestamps and seekable video', skipNoFfmpeg, () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vmerge-timeline-'));
+  const log = { info() {}, warn() {} };
+  try {
+    const inputs = ['red', 'green', 'blue'].map((color, i) => {
+      const file = path.join(root, `${color}.mp4`);
+      const audio = i === 2 ? [] : ['-f', 'lavfi', '-i', `sine=frequency=${440 * (i + 1)}:sample_rate=${i ? 32000 : 44100}:duration=1`];
+      const r = spawnSync(getFfmpegPath(), ['-y', '-f', 'lavfi', '-i', `color=c=${color}:s=160x240:r=24:d=1`, ...audio,
+        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-video_track_timescale', i ? '90000' : '12288', '-c:a', 'aac', file]);
+      assert.equal(r.status, 0, String(r.stderr));
+      return file;
+    });
+    const norm = normalizeClips(inputs, root, log);
+    assert.equal(norm.ok, true, norm.error);
+    const out = path.join(root, 'merged.mp4');
+    assert.equal(runFfmpegConcat(norm.paths, out, log), true);
+    const probe = JSON.parse(spawnSync(getFfprobePath(), ['-v', 'error', '-show_streams', '-show_packets', '-of', 'json', out], { encoding: 'utf8' }).stdout);
+    const video = probe.streams.find(s => s.codec_type === 'video');
+    const audio = probe.streams.find(s => s.codec_type === 'audio');
+    assert.equal(audio.sample_rate, '44100');
+    assert.equal(audio.channels, 2);
+    assert.ok(Math.abs(Number(video.duration) - Number(audio.duration)) < 0.1);
+    assert.ok(Number(video.duration) >= 3 && Number(video.duration) < 3.2);
+    for (const stream of probe.streams) {
+      const packets = probe.packets.filter(p => p.stream_index === stream.index);
+      for (let i = 1; i < packets.length; i++) {
+        const delta = Number(packets[i].dts_time) - Number(packets[i - 1].dts_time);
+        assert.ok(delta > 0 && delta < 0.1, `stream ${stream.index} discontinuity: ${delta}`);
+      }
+    }
+    const decoded = spawnSync(getFfmpegPath(), ['-v', 'error', '-xerror', '-i', out, '-f', 'null', '-'], { encoding: 'utf8' });
+    assert.equal(decoded.status, 0, decoded.stderr);
+    assert.equal(decoded.stderr, '');
+    for (let i = 0; i < 3; i++) {
+      const frame = spawnSync(getFfmpegPath(), ['-v', 'error', '-ss', String(i + 0.5), '-i', out, '-frames:v', '1', '-vf', 'scale=1:1', '-pix_fmt', 'rgb24', '-f', 'rawvideo', '-']);
+      assert.equal(frame.status, 0);
+      assert.ok(frame.stdout[i] > frame.stdout[(i + 1) % 3] + 50, `seek must reach clip ${i + 1}`);
+      const pcm = spawnSync(getFfmpegPath(), ['-v', 'error', '-ss', String(i + 0.3), '-i', out, '-t', '0.3', '-vn', '-ac', '1', '-ar', '8000', '-f', 's16le', '-']);
+      assert.equal(pcm.status, 0);
+      let power = 0;
+      for (let j = 0; j < pcm.stdout.length; j += 2) power += pcm.stdout.readInt16LE(j) ** 2;
+      const rms = Math.sqrt(power / (pcm.stdout.length / 2));
+      assert.ok(i === 2 ? rms < 10 : rms > 100, `clip ${i + 1} audio must be retained or padded with silence`);
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test('extractFrameRateNum parses r_frame_rate strings', () => {
   assert.equal(extractFrameRateNum('25/1'), 25);
@@ -26,7 +75,7 @@ function makeClip(file, size, fps, log) {
   assert.equal(r.status, 0, 'clip generation failed');
 }
 
-test('normalizeClips keeps an already-homogeneous set untouched', skipNoFfmpeg, () => {
+test('normalizeClips also normalizes the first clip and apparently homogeneous clips', skipNoFfmpeg, () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vmerge-hom-'));
   const log = { info(){}, warn(){} };
   try {
@@ -36,7 +85,7 @@ test('normalizeClips keeps an already-homogeneous set untouched', skipNoFfmpeg, 
     makeClip(b, { width: 360, height: 640 }, 24, log);
     const res = normalizeClips([a, b], root, log);
     assert.equal(res.ok, true, res.error);
-    assert.deepEqual(res.paths, [a, b], 'identical params must not be re-encoded');
+    assert.ok(res.paths.every((p, i) => p !== [a, b][i]), 'surface parameters cannot establish stream-copy compatibility');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -53,7 +102,7 @@ test('normalizeClips re-encodes mismatched clips to first clip parameters so con
     const res = normalizeClips([a, b], root, log);
     assert.equal(res.ok, true, res.error);
     assert.equal(res.paths.length, 2);
-    assert.equal(res.paths[0], a, 'first clip acts as target and stays untouched');
+    assert.notEqual(res.paths[0], a, 'first clip must use the same encoder and audio settings');
     assert.notEqual(res.paths[1], b, 'mismatched second clip must be re-encoded');
 
     // The converted clip must match the first clip's parameters.
