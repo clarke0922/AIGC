@@ -53,6 +53,7 @@
             <div class="action-card-inner">
               <h3 class="action-card-title">快速开始</h3>
               <div class="action-card-buttons">
+                <el-button size="large" class="action-btn" @click="$router.push('/film/new?entry=storyboards')">已有分镜，直接制作</el-button>
                 <el-button type="primary" size="large" class="action-btn action-btn-new" @click="goNewProject">
                   <el-icon><Plus /></el-icon>新建短剧项目
                 </el-button>
@@ -1008,12 +1009,15 @@ html.light .btn-import {
 }
 .action-card-buttons {
   display: flex;
+  flex-direction: column;
   gap: 12px;
   width: 100%;
   justify-content: center;
 }
 .action-btn {
-  min-width: 150px;
+  width: 100%;
+  min-width: 0;
+  margin-left: 0;
 }
 .action-btn-new {
   --el-button-bg-color: var(--el-color-primary);

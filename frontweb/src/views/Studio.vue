@@ -2,7 +2,7 @@
   <div class="studio">
     <header class="topbar"><a class="brand" href="/">◈ <span>叙幕 <small>简易工作台 · STORY STUDIO</small></span></a><span class="top-note">把你心里的故事，变成一部短片。</span><button @click="settingsOpen=!settingsOpen" :disabled="!project">模型与费用设置</button><a href="/classic">切换到原版工作台 ↗</a></header>
     <div class="layout">
-      <aside class="sidebar"><div class="side-heading">我的片场 <button class="icon" @click="create(false)" aria-label="新建项目">＋</button></div><button v-for="p in projects" :key="p.id" :class="['project',{active:project?.drama_id===p.id}]" @click="open(p.id)"><span>▣</span><div>{{p.title}}<small>30秒短片 · 本机保存</small></div></button><div class="sidebar-bottom"><button @click="create(true)">打开「雨停之前」示例</button><p>示例包含剧本与分镜，不含AI成片。生成素材需配置自己的模型。</p><span>基于 LocalMiniDrama · MIT</span></div></aside>
+      <aside class="sidebar"><a href="/film/new?entry=storyboards">已有分镜，直接制作 ↗</a><div class="side-heading">我的片场 <button class="icon" @click="create(false)" aria-label="新建项目">＋</button></div><button v-for="p in projects" :key="p.id" :class="['project',{active:project?.drama_id===p.id}]" @click="open(p.id)"><span>▣</span><div>{{p.title}}<small>30秒短片 · 本机保存</small></div></button><div class="sidebar-bottom"><button @click="create(true)">打开「雨停之前」示例</button><p>示例包含剧本与分镜，不含AI成片。生成素材需配置自己的模型。</p><span>基于 LocalMiniDrama · MIT</span></div></aside>
       <main>
         <div v-if="error" class="notice error" role="alert">{{error}} <button class="icon" @click="error=''">×</button></div>
         <div v-if="message" class="notice" role="status">{{message}}</div>

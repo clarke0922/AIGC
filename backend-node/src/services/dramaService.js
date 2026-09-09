@@ -64,6 +64,25 @@ function getDramaById(db, id) {
   return row ? rowToDrama(row) : null;
 }
 
+function createFromStoryboards(db, log, req) {
+  if (typeof req.initial_storyboards !== 'string' || req.initial_storyboards.length > 100000) {
+    throw new TypeError('分镜内容必须是文本，且不超过 100000 字符');
+  }
+  const shots = req.initial_storyboards.replace(/\r\n?/g, '\n').split(/\n[ \t]*\n+/).map(s => s.trim()).filter(Boolean);
+  if (shots.length > 200) throw new RangeError('一次最多导入 200 个分镜');
+  return db.transaction(() => {
+    const drama = createDrama(db, log, req);
+    saveEpisodes(db, log, drama.id, { episodes: [{ episode_number: 1, title: '第1集', script_content: '' }] });
+    const episode = db.prepare('SELECT id FROM episodes WHERE drama_id = ?').get(drama.id);
+    const { createStoryboard } = require('./storyboardService');
+    shots.forEach((description, i) => createStoryboard(db, log, {
+      episode_id: episode.id, storyboard_number: i + 1, title: `镜头 ${i + 1}`,
+      description, image_prompt: description, video_prompt: description, duration: 5,
+    }));
+    return drama;
+  })();
+}
+
 function getDrama(db, dramaId, baseUrl) {
   const drama = getDramaById(db, Number(dramaId));
   if (!drama) return null;
@@ -857,6 +876,7 @@ function downloadEpisodeVideo(db, episodeId) {
 
 module.exports = {
   createDrama,
+  createFromStoryboards,
   getDrama,
   getDramaById,
   listDramas,

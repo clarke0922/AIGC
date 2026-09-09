@@ -11,9 +11,12 @@ function createDrama(db, log) {
       return response.badRequest(res, '标题不能为空');
     }
     try {
-      const drama = dramaService.createDrama(db, log, body);
+      const drama = body.initial_storyboards === undefined
+        ? dramaService.createDrama(db, log, body)
+        : dramaService.createFromStoryboards(db, log, body);
       response.created(res, drama);
     } catch (err) {
+      if (err instanceof TypeError || err instanceof RangeError) return response.badRequest(res, err.message);
       log.error('Create drama failed', { error: err.message, stack: err.stack });
       response.internalError(res, err.message || '创建失败');
     }

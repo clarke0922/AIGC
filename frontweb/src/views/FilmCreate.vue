@@ -189,6 +189,13 @@
       <!-- 剧本工作台：单卡片 + 选项卡（创作 / 选择） -->
       <section class="section card script-workbench-unified">
         <el-tabs v-model="scriptWorkbenchMode" class="script-workbench-tabs">
+          <el-tab-pane v-if="!dramaId" label="已有分镜 · 跳过剧本" name="storyboards" class="direct-storyboard-form">
+            <h2 class="section-title">直接从分镜开始制作</h2>
+            <p class="section-desc">每个镜头之间留一个空行，镜头内可换行。内容原样保存为画面描述和图片、视频提示词，不调用 AI。也可留空，创建后逐个添加分镜。</p>
+            <el-input v-model="scriptTitle" placeholder="项目名称（选填）" aria-label="分镜项目名称" />
+            <el-input v-model="directStoryboardText" type="textarea" :rows="10" :maxlength="100000" :placeholder="'镜头1：雨夜，女孩推开修表铺的门。\n对白：爸，我回来了。\n\n镜头2：父亲抬头，放下手中的旧表。'" aria-label="已有分镜内容" />
+            <el-button type="primary" :loading="creatingFromStoryboards" @click="onCreateFromStoryboards">跳过剧本，进入分镜制作</el-button>
+          </el-tab-pane>
           <el-tab-pane label="创作剧本" name="create">
             <div class="script-pane-inner">
               <div class="script-sub-block">
@@ -2726,6 +2733,28 @@ const storyEpisodeCount = ref(1)
 const storyGenerating = ref(false)
 /** 剧本工作台：create 创作 | select 选择预览 */
 const scriptWorkbenchMode = ref('create')
+const directStoryboardText = ref('')
+const creatingFromStoryboards = ref(false)
+
+async function onCreateFromStoryboards() {
+  if (creatingFromStoryboards.value || store.dramaId) return
+  creatingFromStoryboards.value = true
+  try {
+    const drama = await dramaAPI.create({
+      title: scriptTitle.value?.trim() || '分镜项目',
+      initial_storyboards: directStoryboardText.value,
+      style: generationStyle.value || undefined,
+      metadata: { ...projectStylePromptMetadata(), generation_language: scriptLanguage.value, aspect_ratio: projectAspectRatio.value || '16:9' },
+    })
+    await router.replace({ path: '/film/' + drama.id, query: { entry: 'storyboards' } })
+    directStoryboardText.value = ''
+    ElMessage.success('项目已创建，可直接编辑分镜并生成图片、视频')
+  } catch (e) {
+    ElMessage.error(e.message || '创建失败')
+  } finally {
+    creatingFromStoryboards.value = false
+  }
+}
 const showSelectScriptDialog = ref(false)
 const selectScriptLoading = ref(false)
 const selectScriptImporting = ref(false)
@@ -8205,13 +8234,20 @@ onBeforeUnmount(() => {
 function applyRouteToStore() {
   const id = route.params.id
   if (id && id !== 'new') {
+    if (scriptWorkbenchMode.value === 'storyboards') scriptWorkbenchMode.value = 'create'
     store.setDrama({ id: Number(id) })
     if (route.query.episode) {
       selectedEpisodeId.value = Number(route.query.episode)
     }
-    loadDrama()
+    loadDrama().then(async () => {
+      if (route.query.entry === 'storyboards') {
+        await nextTick()
+        scrollToAnchor('anchor-storyboard')
+      }
+    })
   } else {
     store.reset()
+    scriptWorkbenchMode.value = route.query.entry === 'storyboards' ? 'storyboards' : 'create'
     storyInput.value = ''
     scriptTitle.value = ''
     selectedEpisodeId.value = null
@@ -8269,6 +8305,10 @@ watch(
 </script>
 
 <style scoped>
+.direct-storyboard-form > .el-input,
+.direct-storyboard-form > .el-textarea {
+  margin-bottom: 12px;
+}
 .script-workbench-unified {
   margin-bottom: 0;
 }
