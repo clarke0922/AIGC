@@ -470,9 +470,9 @@ function buildFourViewImagePrompt(fourViewDescription, styleEn, styleZh) {
   const en = (styleEn || '').trim();
 
   const styleLines = [];
-  if (zh) styleLines.push(`【画风·最高优先级】四格统一：${zh}`);
-  if (en && en !== zh) styleLines.push(`MANDATORY ART STYLE (all 4 panels): ${en}.`);
-  else if (en && !zh) styleLines.push(`MANDATORY ART STYLE (all 4 panels): ${en}.`);
+  if (zh) styleLines.push(`【画风·最高优先级】所有分区统一：${zh}`);
+  if (en && en !== zh) styleLines.push(`MANDATORY ART STYLE (all panels): ${en}.`);
+  else if (en && !zh) styleLines.push(`MANDATORY ART STYLE (all panels): ${en}.`);
   const styleHeader = styleLines.length ? `${styleLines.join('\n')}\n\n` : '';
 
   const gender = detectGenderFromDescription(fourViewDescription);
@@ -608,6 +608,10 @@ async function generateCharacterFourViewImage(db, log, cfg, characterId, modelNa
 
     log.info('[四视图] Step1 完成，开始Step2生图', { character_id: characterId });
   }
+
+  // 旧提示词也应用当前人体/版式约束，保留用户保存的正文。
+  const anatomyContract = promptI18n.getRoleAnatomyContract();
+  if (!imagePrompt.includes(anatomyContract)) imagePrompt += `\n\n${anatomyContract}`;
 
   const userNeg = imageClient.resolveAssetUserNegativeForApi(modelName, charRow.negative_prompt);
   const imageGen = imageClient.createAndGenerateImage(db, log, {

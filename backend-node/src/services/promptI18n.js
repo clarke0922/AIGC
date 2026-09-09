@@ -1168,6 +1168,15 @@ Follow ART STYLE / 画风 block at the start of the user message if present.`;
 /**
  * 角色参考表提示词生成：文本AI将角色外貌描述转化为工业分栏角色参考表绘图提示词（非四宫格）
  */
+function getRoleAnatomyContract() {
+  return `FRONT / BACK VIEW — anatomy and layout constraints (override conflicting pose/layout descriptions):
+- Reserve two separate, equal-height tall panels side by side in the right area for FRONT VIEW and BACK VIEW. Keep close-ups, costume details and labels outside these body silhouettes; shrink detail panels before reducing full-body space.
+- Each full-body panel contains exactly one complete depiction of the same character. Align head tops and soles at the same scale. Leave a small margin around head, hands and feet; never stretch or squash the body to fill a panel.
+- FRONT VIEW: head, shoulders, chest, pelvis, knees and toes all face the viewer squarely. BACK VIEW: all face directly away, showing the back of the head and heels; no visible face, no looking over the shoulder, no front-facing chest on a backward body.
+- Neutral balanced standing pose, arms relaxed slightly clear of the torso, hands relaxed, legs uncrossed and feet separated. Preserve the character's specified anatomy and stylization; for human characters keep one head, one torso, two arms and two legs, coherent joints and correctly attached hands/feet. No duplicated, missing, fused or twisted limbs, reversed joints, merged silhouettes or anatomy crossing panel borders.
+- Face/side close-ups depict the same identity separately; they must not attach to or replace the heads of the full-body figures. Costume hides anatomy naturally; never draw extra limbs or transparent clothing to expose hidden parts.`;
+}
+
 function getRolePolishPrompt(cfg) {
   const style = isEnglish(cfg) ? styleTextEnForImage(cfg) : styleTextZhForPolish(cfg);
   return `# 工业角色参考表标准提示词生成器
@@ -1223,6 +1232,8 @@ function getRolePolishPrompt(cfg) {
 | 自信 | 下巴微抬，目光平视前方 |
 | 温柔 | 眉毛弧度柔和，眼角微圆 |
 
+${getRoleAnatomyContract()}
+
 ## 输出格式
 
 【基础设定】
@@ -1271,6 +1282,8 @@ ONE image, single canvas (NOT a 2×2 or 4×4 grid, NOT four equal quadrants). La
 - RIGHT ~2/3 = labeled sub-panels: FRONT VIEW (front full body), BACK VIEW (back full body), SIDE PROFILE CLOSE-UP (90° profile face close-up, not full body), COSTUME / SUIT DETAIL VIEW, MATERIAL & TEXTURE NOTES (short tags only: cloth, metal, leather, edge wear — NOT a full-width bottom text bar). Optional SIGNATURE PROP / EQUIPMENT DETAIL if the user prompt mentions that prop.
 - NO left-profile full-body panel. FRONT and BACK: same character, same outfit, same proportions, same lighting and scale; neutral standing, head-to-toe, arms at sides, no action pose. SIDE PROFILE CLOSE-UP complements FACE HERO (same identity/age/makeup; profile view, not duplicate front face).
 - Costume/material only in right-side panels. No color-swatch strip. Fine light-gray dividers. Cinematic industrial reference sheet, 4K detail density — not a poster, not a comic grid, not a photo collage.
+
+${getRoleAnatomyContract()}
 
 Solid white only (RGB 255,255,255). No watermark logos. Panel titles and material tags printed ON the reference sheet are required. No environment/ground beyond minimal foot contact if needed. Follow ART STYLE / 画风 / MANDATORY ART STYLE at the start of the user message if present.`;
 }
@@ -1621,6 +1634,7 @@ module.exports = {
   getStoryExpansionSystemPrompt,
   buildStoryExpansionUserPrompt,
   getRolePolishPrompt,
+  getRoleAnatomyContract,
   getRoleGenerateImagePrompt,
   getScenePolishPrompt,
   getScenePolishPromptSingle,
