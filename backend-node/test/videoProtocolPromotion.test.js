@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const videoClient = require('../src/services/videoClient');
+const aiConfigService = require('../src/services/aiConfigService');
 
 test('resolveVideoProtocol 自动推断：Seedance 2.x 家族 + volces 升级为 volcengine_omni', () => {
   const cfg = { provider: 'volces', api_protocol: '', default_model: 'doubao-seedance-2-0-260128' };
@@ -20,4 +21,12 @@ test('resolveVideoProtocol 显式协议优先：即便 SD2 家族也不覆盖显
 test('resolveVideoProtocol 显式 volcengine_omni 保持不变', () => {
   const cfg = { provider: 'volces', api_protocol: 'volcengine_omni', default_model: 'doubao-seedance-2-5-260628' };
   assert.strictEqual(videoClient.resolveVideoProtocol(cfg), 'volcengine_omni');
+});
+
+test('missing video config returns an actionable Chinese error', async (t) => {
+  t.mock.method(aiConfigService, 'listConfigs', () => []);
+  await assert.rejects(
+    videoClient.callVideoApi({}, { info() {}, warn() {}, error() {} }, { prompt: 'test' }),
+    /未配置视频模型，请在「AI 配置」中添加 video 类型且已启用的配置/
+  );
 });

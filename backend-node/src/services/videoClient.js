@@ -3735,7 +3735,7 @@ async function callVideoApi(db, log, opts) {
   let prompt = enforceNoOnScreenText(rawPrompt);
   const config = opts.config_override || getDefaultVideoConfig(db, preferredModel);
   if (!config) {
-    throw new Error('???????????AI ?????? video ?????????');
+    throw new Error('未配置视频模型，请在「AI 配置」中添加 video 类型且已启用的配置');
   }
   const selfHostedH3 = walkingWithAi.isConfig(config);
   if (selfHostedH3 || resolveVideoProtocol(config, preferredModel) === 'minimax_h3') {
