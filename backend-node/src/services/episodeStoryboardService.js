@@ -27,6 +27,17 @@ function normalizeStoryboardShotNumber(rawOrSb) {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
 }
 
+/**
+ * AI 偶尔会把 shot_number 从 2 开始或乱序返回；数组本身才是模型给出的叙事顺序。
+ * 入库前统一按数组位置编号，保证每集始终从 1 连续递增。
+ */
+function normalizeStoryboardSequence(storyboards, startAt = 0) {
+  return (storyboards || []).map((sb, index) => ({
+    ...sb,
+    shot_number: startAt + index + 1,
+  }));
+}
+
 /** 同集相同 storyboard_number 多行时保留 id 最大的一条（通常为最新入库） */
 function dedupeStoryboardRowsByNumber(rows) {
   const byNum = new Map();
@@ -572,7 +583,7 @@ function insertOneStoryboard(db, episodeIdNum, sb, style, videoRatio, now, deriv
  * 在流式输出过程中，从已积累的文本尝试解析并保存尚未保存的分镜。
  * savedNums：已保存的 storyboard_number Set，用于去重。
  */
-function tryIncrementalSave(db, log, episodeIdNum, accumulated, savedNums, style, videoRatio, deriveOpts = {}) {
+function tryIncrementalSave(db, log, episodeIdNum, accumulated, savedNums, style, videoRatio, deriveOpts = {}, startAt = 0) {
   try {
     let cleaned = accumulated.trim()
       .replace(/^```json\s*/gm, '').replace(/^```\s*/gm, '').replace(/```\s*$/gm, '').trim();
@@ -600,7 +611,7 @@ function tryIncrementalSave(db, log, episodeIdNum, accumulated, savedNums, style
       try { parsed = JSON.parse(safeJson._jsonrepair(arrayCandidate)); } catch (_) {}
     }
     if (!parsed) return;
-    const items = Array.isArray(parsed) ? parsed : extractFirstArray(parsed);
+    const items = normalizeStoryboardSequence(Array.isArray(parsed) ? parsed : extractFirstArray(parsed), startAt);
     if (!items || items.length === 0) return;
     const now = new Date().toISOString();
     let newCount = 0;
@@ -993,7 +1004,7 @@ async function processStoryboardGeneration(db, log, cfg, taskId, episodeId, mode
           streamCallback: (accumulated) => {
             if (accumulated.length - streamThrottle < 400) return;
             streamThrottle = accumulated.length;
-            tryIncrementalSave(db, log, episodeIdNum, accumulated, streamSavedNums, streamStyle, streamVideoRatio, deriveOpts);
+            tryIncrementalSave(db, log, episodeIdNum, accumulated, streamSavedNums, streamStyle, streamVideoRatio, deriveOpts, storyboards.length);
           },
         });
       } catch (e) {
@@ -1033,6 +1044,7 @@ async function processStoryboardGeneration(db, log, cfg, taskId, episodeId, mode
     }
     // ── 续写结束 ────────────────────────────────────────────────────────────
 
+    storyboards = normalizeStoryboardSequence(storyboards);
     const totalDuration = storyboards.reduce((sum, sb) => sum + (Number(sb.duration) || 0), 0);
     if (parseMeta.truncated) {
       log.warn('Storyboard still truncated after max continuations', {
@@ -1577,6 +1589,7 @@ function splitStoryboardByAudio(db, log, storyboardId) {
 
 module.exports = {
   normalizeStoryboardShotNumber,
+  normalizeStoryboardSequence,
   dedupeStoryboardRowsByNumber,
   getStoryboardsForEpisode,
   generateStoryboard,
