@@ -1411,6 +1411,7 @@ async function callImageApi(db, log, opts) {
     storage_local_path,
     system_prompt,
     user_negative_prompt,
+    disable_negative_prompt,
   } = opts;
   const preferredProvider = preferred_provider ?? opts.preferredProvider;
   const config = opts.config_override || getDefaultImageConfig(db, preferredModel, preferredProvider, imageServiceType);
@@ -1458,9 +1459,9 @@ async function callImageApi(db, log, opts) {
   const refCountForNeg = Array.isArray(opts.reference_image_urls) ? opts.reference_image_urls.filter(Boolean).length : 0;
   // Seedream/Volcengine 模型强制启用安全词负面提示，其他模型仅在多参考图时启用
   const isVolcOrSeedream = (protocol === 'volcengine' || /seedream|doubao/i.test(model));
-  const autoNegativePrompt = (refCountForNeg > 1 || isVolcOrSeedream) ? ANTI_SPLIT_NEGATIVE_PROMPT : '';
+  const autoNegativePrompt = !disable_negative_prompt && (refCountForNeg > 1 || isVolcOrSeedream) ? ANTI_SPLIT_NEGATIVE_PROMPT : '';
   const userNegFragment = (user_negative_prompt && String(user_negative_prompt).trim()) || '';
-  const mergedNegativePrompt = mergeNegativePromptFragments(autoNegativePrompt, userNegFragment);
+  const mergedNegativePrompt = disable_negative_prompt ? '' : mergeNegativePromptFragments(autoNegativePrompt, userNegFragment);
 
   if (protocol === 'dashscope') {
     return callDashScopeImageApi(config, log, {

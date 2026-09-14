@@ -62,6 +62,8 @@ test('generates two candidates by default with the default text-to-image model a
     assert.equal(image.model, 'seedream');
   }
   assert.equal(imageRequests.length, 2);
+  assert.deepEqual(imageRequests.map((request) => request.disable_negative_prompt), [true, true]);
+  assert.deepEqual(imageRequests.map((request) => request.user_negative_prompt), [undefined, undefined]);
   assert.equal(result.width, 2048);
   assert.equal(result.height, 1152);
 });

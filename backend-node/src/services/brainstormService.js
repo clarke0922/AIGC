@@ -129,11 +129,11 @@ async function generateOne(db, log, config, fullPrompt, generation, target, stor
         size: `${generation.width}x${generation.height}`,
         quality: 'hd',
         imageServiceType: 'image',
+        disable_negative_prompt: true,
         preferredProvider: modelOption?.provider || undefined,
         config_override: modelOption ? {
           ...(aiConfigService.getConfig(db, modelOption.config_id) || {}),
         } : undefined,
-        user_negative_prompt: 'CGI, 3D render, game screenshot, illustration, anime, plastic texture, text, letters, logo, watermark, camera movement',
       });
       if (result.error) throw new Error(result.error);
       const localPath = await uploadService.downloadImageToLocal(

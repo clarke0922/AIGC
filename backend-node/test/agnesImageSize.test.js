@@ -65,3 +65,44 @@ describe('Agnes image request compatibility', () => {
     assert.deepEqual(requests[1].extra_body.image, ['https://cdn.example.com/ref.png']);
   });
 });
+
+describe('Seedream text-to-image queue compatibility', () => {
+  it('omits negative_prompt when the caller disables it', async (t) => {
+    const { callImageApi } = require('../src/services/imageClient');
+    const requests = [];
+    const server = require('node:http').createServer(async (req, res) => {
+      let raw = '';
+      for await (const chunk of req) raw += chunk;
+      const body = JSON.parse(raw);
+      requests.push(body);
+      res.setHeader('Content-Type', 'application/json');
+      if ('negative_prompt' in body) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: { message: 'negative_prompt 不是文生图队列支持的字段' } }));
+        return;
+      }
+      res.end(JSON.stringify({ data: [{ url: 'https://cdn.example.com/seedream.png' }] }));
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    t.after(() => new Promise(resolve => server.close(resolve)));
+
+    const result = await callImageApi(null, { info() {}, warn() {}, error() {} }, {
+      config_override: {
+        provider: 'volcengine',
+        model: ['doubao-seedream-4-0'],
+        api_protocol: 'openai',
+        base_url: `http://127.0.0.1:${server.address().port}/v1`,
+        endpoint: '/images/generations',
+      },
+      model: 'doubao-seedream-4-0',
+      prompt: '雨夜码头',
+      size: '1024x1024',
+      imageServiceType: 'image',
+      user_negative_prompt: 'text, watermark',
+      disable_negative_prompt: true,
+    });
+
+    assert.deepEqual(result, { image_url: 'https://cdn.example.com/seedream.png' });
+    assert.equal(Object.hasOwn(requests[0], 'negative_prompt'), false);
+  });
+});
