@@ -4,6 +4,52 @@ const aiClient = require('./aiClient');
 const promptI18n = require('./promptI18n');
 const { mergeCfgStyleWithDrama } = require('../utils/dramaStyleMerge');
 
+const SCENE_REFERENCE_RENDER_LOCK = `
+Re-render this reference image with the scene content strictly locked: composition, objects, figures, spatial layout, perspective, and camera angle must remain exactly identical to the original — no new elements added, no elements removed. Apply only three enhancements:
+1. Light & contrast: a clear motivated key light direction, shadows pushed deeper while retaining readable detail, layered highlights without clipping, the overall light ratio widened for dramatic tension.
+2. Material detail: every surface follows physical truth — rough surfaces show grain, metal catches worn anisotropic highlights, glass carries correct reflections, fabric shows fibers following the folds; detail appears only on meaningful surfaces, never smeared evenly across the frame.
+3. Cinematic feel: rich, nuanced color gradation with natural transitions, deep and clean shadow tones, a sense of optical depth in the space, like a single frame extracted from a feature film.
+Avoid: altered composition, added elements, plastic-looking surfaces, oversaturation, over-sharpening, halo bloom, dirty texture buildup, watermarks.
+`.trim();
+
+function getSceneReferenceImage(sceneRow, cfg) {
+  const ref = String(sceneRow.ref_image || '').trim();
+  if (ref) return ref;
+  const local = String(sceneRow.local_path || '').trim();
+  if (local) return local;
+  const imageUrl = String(sceneRow.image_url || '').trim();
+  if (/^https?:\/\//i.test(imageUrl)) return imageUrl;
+  try {
+    const extras = sceneRow.extra_images
+      ? (typeof sceneRow.extra_images === 'string' ? JSON.parse(sceneRow.extra_images) : sceneRow.extra_images)
+      : [];
+    return Array.isArray(extras) && extras[0] ? String(extras[0]) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function getStoragePaths(cfg) {
+  const configured = cfg?.storage?.local_path || './data/storage';
+  const storageLocalPath = require('path').isAbsolute(configured)
+    ? configured
+    : require('path').join(process.cwd(), configured);
+  const filesBaseUrl = cfg?.storage?.base_url ? String(cfg.storage.base_url).replace(/\/$/, '') : '';
+  return { storageLocalPath, filesBaseUrl };
+}
+
+function withSceneReferenceLock(imagePrompt, sceneRow, cfg) {
+  const referenceImage = getSceneReferenceImage(sceneRow, cfg);
+  if (!referenceImage) return { prompt: imagePrompt };
+  const { storageLocalPath, filesBaseUrl } = getStoragePaths(cfg);
+  return {
+    prompt: `${SCENE_REFERENCE_RENDER_LOCK}\n\n${imagePrompt}`,
+    referenceImage,
+    storageLocalPath,
+    filesBaseUrl,
+  };
+}
+
 function applySceneStyleOverride(cfg, styleOverride) {
   const o = (styleOverride || '').toString().trim();
   if (!o) return cfg;
@@ -312,7 +358,7 @@ async function generateSceneSinglePromptOnly(db, log, cfg, sceneId, modelName, s
  */
 async function generateSceneFourViewImage(db, log, cfg, sceneId, modelName, style) {
   const sceneRow = db.prepare(
-    'SELECT id, drama_id, location, time, prompt, polished_prompt FROM scenes WHERE id = ? AND deleted_at IS NULL'
+    'SELECT id, drama_id, location, time, prompt, polished_prompt, image_url, local_path, extra_images, ref_image FROM scenes WHERE id = ? AND deleted_at IS NULL'
   ).get(Number(sceneId));
   if (!sceneRow) return { ok: false, error: 'scene not found' };
   const dramaFull = db.prepare('SELECT id, style, metadata FROM dramas WHERE id = ? AND deleted_at IS NULL').get(sceneRow.drama_id);
@@ -390,7 +436,7 @@ async function generateSceneFourViewImage(db, log, cfg, sceneId, modelName, styl
  */
 async function generateSceneSingleImage(db, log, cfg, sceneId, modelName, style) {
   const sceneRow = db.prepare(
-    'SELECT id, drama_id, location, time, prompt, polished_prompt, polished_prompt_single FROM scenes WHERE id = ? AND deleted_at IS NULL'
+    'SELECT id, drama_id, location, time, prompt, polished_prompt, polished_prompt_single, image_url, local_path, extra_images, ref_image FROM scenes WHERE id = ? AND deleted_at IS NULL'
   ).get(Number(sceneId));
   if (!sceneRow) return { ok: false, error: 'scene not found' };
   const dramaFull = db.prepare('SELECT id, style, metadata FROM dramas WHERE id = ? AND deleted_at IS NULL').get(sceneRow.drama_id);
@@ -445,14 +491,22 @@ async function generateSceneSingleImage(db, log, cfg, sceneId, modelName, style)
     log.info('[场景单图] Step1 完成，开始Step2生图', { scene_id: sceneId });
   }
 
+  const referenceRender = withSceneReferenceLock(imagePrompt, sceneRow, cfg);
   const imageGen = imageClient.createAndGenerateImage(db, log, {
     drama_id: sceneRow.drama_id,
     scene_id: sceneId,
-    prompt: imagePrompt,
+    prompt: referenceRender.prompt,
     model: modelName || undefined,
     size: '1792x1024',
     quality: 'standard',
     provider: 'openai',
+    reference_image_urls: referenceRender.referenceImage ? [referenceRender.referenceImage] : undefined,
+    files_base_url: referenceRender.filesBaseUrl,
+    storage_local_path: referenceRender.storageLocalPath,
+    system_prompt: referenceRender.referenceImage ? 'Image 1: existing scene reference plate. Preserve it exactly; enhance only light, material truth, and cinematic finish.' : undefined,
+    user_negative_prompt: referenceRender.referenceImage
+      ? 'altered composition, added elements, removed elements, changed camera angle, changed perspective, plastic-looking surfaces, oversaturation, over-sharpening, halo bloom, dirty texture buildup, watermarks'
+      : undefined,
   });
 
   log.info('[场景单图] Step2 图片生成任务已提交', { scene_id: sceneId, image_gen_id: imageGen?.id });
