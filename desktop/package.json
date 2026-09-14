@@ -15,7 +15,7 @@
     "dist": "npm run prepare-backend && npm run build:front && npm run copy-front && npm run clean:unpacked && electron-builder --win",
     "dist:cn": "node scripts/dist-cn.js",
     "dist:mac": "bash dist-mac.sh",
-    "postinstall": "node scripts/copy-backend.js && electron-builder install-app-deps",
+    "postinstall": "node scripts/copy-backend.js && node scripts/install-app-deps.js",
     "prepare-backend": "node scripts/copy-backend.js"
   },
   "dependencies": {
