@@ -3,6 +3,7 @@ const path = require('path');
 const { randomUUID } = require('crypto');
 const imageClient = require('./imageClient');
 const uploadService = require('./uploadService');
+const aiConfigService = require('./aiConfigService');
 
 const ASPECT_RATIOS = new Set(['21:9', '16:9', '9:16', '1:1', '4:3', '3:4']);
 
@@ -81,7 +82,84 @@ async function resizeSavedImage(storageRoot, localPath, target) {
   return output.localPath;
 }
 
-async function generateBrainstormImage(db, log, config, req) {
+function listImageModelOptions(db) {
+  const options = [];
+  const configs = aiConfigService.listConfigs(db, 'image').filter((c) => c.is_active);
+  for (const cfg of configs) {
+    const models = Array.isArray(cfg.model) && cfg.model.length
+      ? cfg.model
+      : (cfg.default_model ? [cfg.default_model] : []);
+    for (const model of models) {
+      options.push({
+        config_id: cfg.id,
+        name: cfg.name || cfg.provider || '文生图模型',
+        provider: cfg.provider || '',
+        model: String(model),
+        is_default: !!cfg.is_default && models[0] === model,
+      });
+    }
+  }
+  return options;
+}
+
+function resolveModelOptions(db, req) {
+  const all = listImageModelOptions(db);
+  if (!all.length) return [];
+  const requested = Array.isArray(req.models)
+    ? req.models.map((m) => String(m || '').trim()).filter(Boolean)
+    : [];
+  if (!requested.length) return [all[0]];
+  const picked = [];
+  for (const key of requested) {
+    const match = all.find((item) => String(item.config_id) === key || `${item.config_id}:${item.model}` === key || item.model === key);
+    if (match && !picked.some((p) => p.config_id === match.config_id && p.model === match.model)) {
+      picked.push(match);
+    }
+  }
+  return picked;
+}
+
+async function generateOne(db, log, config, fullPrompt, generation, target, storageRoot, modelOption, countPerModel) {
+  const tasks = [];
+  for (let i = 0; i < countPerModel; i += 1) {
+    tasks.push((async () => {
+      const result = await imageClient.callImageApi(db, log, {
+        prompt: fullPrompt,
+        model: modelOption?.model || undefined,
+        size: `${generation.width}x${generation.height}`,
+        quality: 'hd',
+        imageServiceType: 'image',
+        preferredProvider: modelOption?.provider || undefined,
+        config_override: modelOption ? {
+          ...(aiConfigService.getConfig(db, modelOption.config_id) || {}),
+        } : undefined,
+        user_negative_prompt: 'CGI, 3D render, game screenshot, illustration, anime, plastic texture, text, letters, logo, watermark, camera movement',
+      });
+      if (result.error) throw new Error(result.error);
+      const localPath = await uploadService.downloadImageToLocal(
+        storageRoot,
+        result.image_url,
+        'brainstorms',
+        log,
+        'brainstorm_'
+      );
+      if (!localPath) throw new Error('图片保存失败');
+      const finalLocalPath = await resizeSavedImage(storageRoot, localPath, target);
+      return {
+        image_url: `/static/${finalLocalPath}`,
+        local_path: finalLocalPath,
+        download_url: `/static/${finalLocalPath}`,
+        model: modelOption?.model || 'default',
+        model_name: modelOption?.name || '默认文生图模型',
+        width: target.width,
+        height: target.height,
+      };
+    })());
+  }
+  return Promise.all(tasks);
+}
+
+async function generateBrainstormImages(db, log, config, req) {
   const prompt = String(req.prompt || '').trim();
   if (!prompt) throw new Error('请输入头脑风暴提示词');
   if (prompt.length > 4000) throw new Error('提示词不能超过4000字');
@@ -91,30 +169,24 @@ async function generateBrainstormImage(db, log, config, req) {
   const target = getResolutionDimensions(aspectRatio, resolution);
   const generation = getGenerationDimensions(target);
   const fullPrompt = buildBrainstormPrompt(prompt, aspectRatio);
-  const result = await imageClient.callImageApi(db, log, {
-    prompt: fullPrompt,
-    size: `${generation.width}x${generation.height}`,
-    quality: 'hd',
-    imageServiceType: 'image',
-    user_negative_prompt: 'CGI, 3D render, game screenshot, illustration, anime, plastic texture, text, letters, logo, watermark, camera movement',
-  });
-  if (result.error) throw new Error(result.error);
-
   const storageRoot = getStorageRoot(config);
-  const localPath = await uploadService.downloadImageToLocal(
-    storageRoot,
-    result.image_url,
-    'brainstorms',
-    log,
-    'brainstorm_'
-  );
-  if (!localPath) throw new Error('图片保存失败');
-
-  const finalLocalPath = await resizeSavedImage(storageRoot, localPath, target);
+  const modelOptions = resolveModelOptions(db, req);
+  if (!modelOptions.length) throw new Error('未配置可用的文生图（image）模型，请在「AI 配置」中添加并启用');
+  const explicitModels = Array.isArray(req.models) && req.models.filter(Boolean).length > 0;
+  const countPerModel = explicitModels && modelOptions.length > 1 ? 1 : 2;
+  const groups = await Promise.all(modelOptions.map((option) =>
+    generateOne(db, log, config, fullPrompt, generation, target, storageRoot, option, countPerModel)
+  ));
+  const images = groups.flat().map((item, index) => ({
+    ...item,
+    id: `${index + 1}`,
+    prompt: fullPrompt,
+    aspect_ratio: aspectRatio,
+    resolution,
+  }));
   return {
-    image_url: `/static/${finalLocalPath}`,
-    local_path: finalLocalPath,
-    download_url: `/static/${finalLocalPath}`,
+    images,
+    model_options: listImageModelOptions(db),
     prompt: fullPrompt,
     aspect_ratio: aspectRatio,
     resolution,
@@ -126,5 +198,6 @@ async function generateBrainstormImage(db, log, config, req) {
 module.exports = {
   buildBrainstormPrompt,
   getResolutionDimensions,
-  generateBrainstormImage,
+  generateBrainstormImages,
+  listImageModelOptions,
 };

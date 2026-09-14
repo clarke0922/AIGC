@@ -130,6 +130,24 @@
             show-word-limit
             placeholder="输入画面想法，例如：雨夜码头，一个女人刚停下脚步等待远处的船..."
           />
+          <div class="brainstorm-option brainstorm-model">
+            <label>文生图模型（可多选，每个模型各生成 1 张）</label>
+            <el-select
+              v-model="brainstormForm.models"
+              multiple
+              collapse-tags
+              collapse-tags-tooltip
+              :placeholder="brainstormModels.length ? '默认使用默认模型生成 2 张' : '暂未配置可用文生图模型'"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="m in brainstormModels"
+                :key="m.config_id + ':' + m.model"
+                :label="`${m.name} · ${m.model}`"
+                :value="m.config_id + ':' + m.model"
+              />
+            </el-select>
+          </div>
           <div class="brainstorm-options">
             <div class="brainstorm-option">
               <label>画面比例</label>
@@ -151,7 +169,7 @@
             </div>
           </div>
           <el-alert
-            title="系统会按 KSRMJ 一段式五段论自动补全类型、机位构图、主体环境、光线材质和负面约束；分辨率由后端生成后统一放大到精确长边。"
+            title="系统会按 KSRMJ 一段式五段论自动补全类型、机位构图、主体环境、光线材质和负面约束；默认模型一次出 2 张候选，勾选多个模型时每个模型各出 1 张；分辨率由后端统一放大到精确长边。"
             type="info"
             :closable="false"
             class="brainstorm-tip"
@@ -164,24 +182,32 @@
             :disabled="!brainstormForm.prompt.trim()"
             @click="generateBrainstormImage"
           >
-            {{ brainstormGenerating ? '正在生成 2K/4K 图片...' : '生成图片' }}
+            {{ brainstormGenerating ? '正在生成候选图片...' : '生成候选图片' }}
           </el-button>
         </div>
         <div class="brainstorm-result-wrap">
-          <div v-if="!brainstormResult && !brainstormGenerating" class="brainstorm-empty">
+          <div v-if="!brainstormImages.length && !brainstormGenerating" class="brainstorm-empty">
             <el-icon><MagicStick /></el-icon>
-            <span>生成后可预览和下载</span>
+            <span>生成后从候选中挑选并下载</span>
           </div>
           <div v-if="brainstormGenerating" v-loading="true" element-loading-text="正在调用图片模型..." class="brainstorm-loading" />
-          <div v-if="brainstormResult && !brainstormGenerating" class="brainstorm-result">
-            <img :src="brainstormResult.image_url" alt="头脑风暴图片" @click="openImagePreview(brainstormResult.image_url)" />
-            <div class="brainstorm-result-meta">
-              <span>{{ brainstormResult.width }} × {{ brainstormResult.height }}</span>
-              <span>{{ resolutionLabel(brainstormResult.resolution) }}</span>
+          <div v-if="brainstormImages.length && !brainstormGenerating" class="brainstorm-candidates">
+            <div
+              v-for="(img, idx) in brainstormImages"
+              :key="img.local_path || idx"
+              class="brainstorm-card"
+              :class="{ 'is-selected': selectedBrainstormId === img.id }"
+              @click="selectedBrainstormId = img.id"
+            >
+              <img :src="img.image_url" :alt="`候选 ${idx + 1}`" @click.stop="openImagePreview(img.image_url)" />
+              <div class="brainstorm-card-meta">
+                <span class="brainstorm-card-model" :title="img.model">{{ img.model_name || img.model }}</span>
+                <span>{{ img.width }} × {{ img.height }} · {{ resolutionLabel(img.resolution) }}</span>
+              </div>
+              <el-button size="small" type="primary" plain @click.stop="downloadBrainstormImage(img)">
+                <el-icon><Download /></el-icon>下载
+              </el-button>
             </div>
-            <el-button type="primary" @click="downloadBrainstormImage">
-              <el-icon><Download /></el-icon>下载图片
-            </el-button>
           </div>
         </div>
       </div>
@@ -515,15 +541,24 @@ function openImagePreview(url) {
 
 const showBrainstorm = ref(false)
 const brainstormGenerating = ref(false)
-const brainstormResult = ref(null)
+const brainstormModels = ref([])
+const brainstormImages = ref([])
+const selectedBrainstormId = ref(null)
 const brainstormForm = ref({
   prompt: '',
   aspect_ratio: '21:9',
   resolution: '2k',
+  models: [],
 })
 
-function openBrainstorm() {
+async function openBrainstorm() {
   showBrainstorm.value = true
+  try {
+    const res = await brainstormAPI.listModels()
+    brainstormModels.value = res?.models || []
+  } catch (_) {
+    brainstormModels.value = []
+  }
 }
 
 function resolutionLabel(value) {
@@ -537,15 +572,18 @@ async function generateBrainstormImage() {
     return
   }
   brainstormGenerating.value = true
-  brainstormResult.value = null
+  brainstormImages.value = []
+  selectedBrainstormId.value = null
   try {
     const result = await brainstormAPI.generateImage({
       prompt,
       aspect_ratio: brainstormForm.value.aspect_ratio,
       resolution: brainstormForm.value.resolution,
+      models: brainstormForm.value.models,
     })
-    brainstormResult.value = result
-    ElMessage.success('图片已生成')
+    brainstormImages.value = result?.images || []
+    if (brainstormImages.value.length) selectedBrainstormId.value = brainstormImages.value[0].id
+    ElMessage.success(`已生成 ${brainstormImages.value.length} 张候选图片`)
   } catch (e) {
     ElMessage.error(e.message || '头脑风暴图片生成失败')
   } finally {
@@ -553,11 +591,11 @@ async function generateBrainstormImage() {
   }
 }
 
-function downloadBrainstormImage() {
-  if (!brainstormResult.value?.image_url) return
+function downloadBrainstormImage(image) {
+  if (!image?.image_url) return
   const a = document.createElement('a')
-  a.href = brainstormResult.value.image_url
-  a.download = `ksr_brainstorm_${brainstormResult.value.resolution}_${brainstormResult.value.width}x${brainstormResult.value.height}.jpg`
+  a.href = image.image_url
+  a.download = `ksr_brainstorm_${image.model || 'image'}_${image.resolution}_${image.width}x${image.height}.jpg`
   a.rel = 'noopener'
   document.body.appendChild(a)
   a.click()
@@ -1043,26 +1081,57 @@ onMounted(async () => {
 .brainstorm-empty .el-icon {
   font-size: 38px;
 }
-.brainstorm-result {
+.brainstorm-model {
+  margin-bottom: 2px;
+}
+.brainstorm-candidates {
   min-height: 100%;
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 10px;
+  overflow-y: auto;
+  max-height: 560px;
 }
-.brainstorm-result img {
+.brainstorm-card {
+  border: 1px solid rgba(99, 102, 241, 0.18);
+  border-radius: 12px;
+  padding: 8px;
+  background: rgba(12, 12, 18, 0.72);
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+.brainstorm-card.is-selected {
+  border-color: rgba(217, 70, 239, 0.72);
+  box-shadow: 0 0 0 2px rgba(217, 70, 239, 0.18), 0 8px 24px rgba(168, 85, 247, 0.16);
+}
+.brainstorm-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(168, 85, 247, 0.55);
+}
+.brainstorm-card img {
   width: 100%;
-  max-height: 330px;
-  object-fit: contain;
-  border-radius: 10px;
+  max-height: 180px;
+  object-fit: cover;
+  border-radius: 8px;
   cursor: zoom-in;
   background: #111;
 }
-.brainstorm-result-meta {
+.brainstorm-card-meta {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  gap: 8px;
   color: #a1a1aa;
   font-size: 12px;
+  margin: 6px 0;
+}
+.brainstorm-card-model {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #f0abfc;
 }
 @media (max-width: 760px) {
   .brainstorm-panel {

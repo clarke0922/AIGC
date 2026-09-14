@@ -106,11 +106,19 @@ function routes(db, cfg, log) {
     },
     brainstormImage: async (req, res) => {
       try {
-        const item = await brainstormService.generateBrainstormImage(db, log, cfg, req.body || {});
+        const item = await brainstormService.generateBrainstormImages(db, log, cfg, req.body || {});
         response.success(res, item);
       } catch (err) {
         log.error('brainstorm image create', { error: err.message });
         if (/请输入|不能超过/.test(err.message)) return response.badRequest(res, err.message);
+        response.internalError(res, err.message);
+      }
+    },
+    brainstormModels: (req, res) => {
+      try {
+        response.success(res, { models: brainstormService.listImageModelOptions(db) });
+      } catch (err) {
+        log.error('brainstorm models list', { error: err.message });
         response.internalError(res, err.message);
       }
     },
