@@ -2,6 +2,7 @@ const response = require('../response');
 const imageService = require('../services/imageService');
 const taskService = require('../services/taskService');
 const backgroundExtractionService = require('../services/backgroundExtractionService');
+const brainstormService = require('../services/brainstormService');
 
 function routes(db, cfg, log) {
   return {
@@ -100,6 +101,16 @@ function routes(db, cfg, log) {
         response.created(res, item);
       } catch (err) {
         log.error('images upload', { error: err.message });
+        response.internalError(res, err.message);
+      }
+    },
+    brainstormImage: async (req, res) => {
+      try {
+        const item = await brainstormService.generateBrainstormImage(db, log, cfg, req.body || {});
+        response.success(res, item);
+      } catch (err) {
+        log.error('brainstorm image create', { error: err.message });
+        if (/请输入|不能超过/.test(err.message)) return response.badRequest(res, err.message);
         response.internalError(res, err.message);
       }
     },

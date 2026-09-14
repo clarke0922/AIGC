@@ -246,6 +246,7 @@ function setupRouter(cfg, db, log) {
   r.post('/images/episode/:episode_id/batch', images.episodeBatch);
   r.post('/images/scene/:scene_id', images.scene);
   r.post('/images/upload', images.upload);
+  r.post('/brainstorm/images', images.brainstormImage);
   r.get('/images/:id', images.get);
   r.delete('/images/:id', images.delete);
 

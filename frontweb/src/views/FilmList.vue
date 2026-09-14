@@ -20,6 +20,9 @@
         </div>
         <!-- 右侧操作区 -->
         <div class="header-actions">
+          <el-button type="warning" class="btn-brainstorm" @click="openBrainstorm">
+            <el-icon><MagicStick /></el-icon>头脑风暴
+          </el-button>
           <!-- 暂时隐藏，功能待完善 -->
           <!-- <el-button class="btn-library" title="自由创作" @click="$router.push('/free-create')">
             <el-icon><MagicStick /></el-icon>自由创作
@@ -109,6 +112,80 @@
         </div>
       </div>
     </main>
+
+    <el-dialog
+      v-model="showBrainstorm"
+      title="头脑风暴 · KSR电影感出图"
+      width="860px"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <div class="brainstorm-panel">
+        <div class="brainstorm-form">
+          <el-input
+            v-model="brainstormForm.prompt"
+            type="textarea"
+            :rows="5"
+            maxlength="4000"
+            show-word-limit
+            placeholder="输入画面想法，例如：雨夜码头，一个女人刚停下脚步等待远处的船..."
+          />
+          <div class="brainstorm-options">
+            <div class="brainstorm-option">
+              <label>画面比例</label>
+              <el-select v-model="brainstormForm.aspect_ratio">
+                <el-option label="21:9 电影宽银幕（推荐）" value="21:9" />
+                <el-option label="16:9 横屏" value="16:9" />
+                <el-option label="9:16 竖屏" value="9:16" />
+                <el-option label="1:1 方形" value="1:1" />
+                <el-option label="4:3 传统横屏" value="4:3" />
+                <el-option label="3:4 竖版" value="3:4" />
+              </el-select>
+            </div>
+            <div class="brainstorm-option">
+              <label>分辨率</label>
+              <el-radio-group v-model="brainstormForm.resolution">
+                <el-radio-button label="2k">2K</el-radio-button>
+                <el-radio-button label="4k">4K</el-radio-button>
+              </el-radio-group>
+            </div>
+          </div>
+          <el-alert
+            title="系统会按 KSRMJ 一段式五段论自动补全类型、机位构图、主体环境、光线材质和负面约束；分辨率由后端生成后统一放大到精确长边。"
+            type="info"
+            :closable="false"
+            class="brainstorm-tip"
+          />
+          <el-button
+            type="primary"
+            size="large"
+            class="brainstorm-generate"
+            :loading="brainstormGenerating"
+            :disabled="!brainstormForm.prompt.trim()"
+            @click="generateBrainstormImage"
+          >
+            {{ brainstormGenerating ? '正在生成 2K/4K 图片...' : '生成图片' }}
+          </el-button>
+        </div>
+        <div class="brainstorm-result-wrap">
+          <div v-if="!brainstormResult && !brainstormGenerating" class="brainstorm-empty">
+            <el-icon><MagicStick /></el-icon>
+            <span>生成后可预览和下载</span>
+          </div>
+          <div v-if="brainstormGenerating" v-loading="true" element-loading-text="正在调用图片模型..." class="brainstorm-loading" />
+          <div v-if="brainstormResult && !brainstormGenerating" class="brainstorm-result">
+            <img :src="brainstormResult.image_url" alt="头脑风暴图片" @click="openImagePreview(brainstormResult.image_url)" />
+            <div class="brainstorm-result-meta">
+              <span>{{ brainstormResult.width }} × {{ brainstormResult.height }}</span>
+              <span>{{ resolutionLabel(brainstormResult.resolution) }}</span>
+            </div>
+            <el-button type="primary" @click="downloadBrainstormImage">
+              <el-icon><Download /></el-icon>下载图片
+            </el-button>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
 
     <!-- 新建项目：先填标题和描述 -->
     <el-dialog
@@ -355,6 +432,7 @@ import { propLibraryAPI } from '@/api/propLibrary'
 import AIConfigContent from '@/components/AIConfigContent.vue'
 import { uploadAPI } from '@/api/upload'
 import { taskAPI } from '@/api/task'
+import { brainstormAPI } from '@/api/brainstorm'
 import { getStyleLabel } from '@/constants/styleOptions'
 
 const router = useRouter()
@@ -433,6 +511,57 @@ function assetImageUrl(item) {
 }
 function openImagePreview(url) {
   if (url) previewImageUrl.value = url
+}
+
+const showBrainstorm = ref(false)
+const brainstormGenerating = ref(false)
+const brainstormResult = ref(null)
+const brainstormForm = ref({
+  prompt: '',
+  aspect_ratio: '21:9',
+  resolution: '2k',
+})
+
+function openBrainstorm() {
+  showBrainstorm.value = true
+}
+
+function resolutionLabel(value) {
+  return String(value || '').toUpperCase() === '4K' ? '4K' : '2K'
+}
+
+async function generateBrainstormImage() {
+  const prompt = brainstormForm.value.prompt.trim()
+  if (!prompt) {
+    ElMessage.warning('请输入画面想法')
+    return
+  }
+  brainstormGenerating.value = true
+  brainstormResult.value = null
+  try {
+    const result = await brainstormAPI.generateImage({
+      prompt,
+      aspect_ratio: brainstormForm.value.aspect_ratio,
+      resolution: brainstormForm.value.resolution,
+    })
+    brainstormResult.value = result
+    ElMessage.success('图片已生成')
+  } catch (e) {
+    ElMessage.error(e.message || '头脑风暴图片生成失败')
+  } finally {
+    brainstormGenerating.value = false
+  }
+}
+
+function downloadBrainstormImage() {
+  if (!brainstormResult.value?.image_url) return
+  const a = document.createElement('a')
+  a.href = brainstormResult.value.image_url
+  a.download = `ksr_brainstorm_${brainstormResult.value.resolution}_${brainstormResult.value.width}x${brainstormResult.value.height}.jpg`
+  a.rel = 'noopener'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
 }
 
 // 公共角色库
@@ -847,6 +976,101 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.btn-brainstorm {
+  --el-button-bg-color: rgba(168, 85, 247, 0.16);
+  --el-button-border-color: rgba(217, 70, 239, 0.42);
+  --el-button-text-color: #f0abfc;
+  --el-button-hover-bg-color: rgba(168, 85, 247, 0.26);
+  --el-button-hover-border-color: rgba(217, 70, 239, 0.62);
+  --el-button-hover-text-color: #fae8ff;
+}
+
+.brainstorm-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 18px;
+  min-height: 430px;
+}
+.brainstorm-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.brainstorm-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.brainstorm-option {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.brainstorm-option label {
+  font-size: 13px;
+  color: #52525b;
+  font-weight: 600;
+}
+.brainstorm-option .el-select {
+  width: 100%;
+}
+.brainstorm-tip {
+  align-self: flex-start;
+}
+.brainstorm-generate {
+  margin-top: auto;
+}
+.brainstorm-result-wrap {
+  min-height: 320px;
+  border: 1px solid rgba(99, 102, 241, 0.18);
+  border-radius: 14px;
+  background: rgba(24, 24, 30, 0.62);
+  overflow: hidden;
+}
+.brainstorm-empty,
+.brainstorm-loading {
+  height: 100%;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #71717a;
+}
+.brainstorm-empty .el-icon {
+  font-size: 38px;
+}
+.brainstorm-result {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+}
+.brainstorm-result img {
+  width: 100%;
+  max-height: 330px;
+  object-fit: contain;
+  border-radius: 10px;
+  cursor: zoom-in;
+  background: #111;
+}
+.brainstorm-result-meta {
+  display: flex;
+  justify-content: space-between;
+  color: #a1a1aa;
+  font-size: 12px;
+}
+@media (max-width: 760px) {
+  .brainstorm-panel {
+    grid-template-columns: 1fr;
+  }
+  .brainstorm-options {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* 资源库按钮 —— 靛紫调 */
