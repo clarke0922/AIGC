@@ -18,6 +18,16 @@ function routes(db, log, cfg) {
     generatePrompt: async (req, res) => {
       try {
         const body = req.body || {};
+        if (body.mode === 'single') {
+          const out = await sceneService.generateSceneSinglePromptOnly(
+            db, log, cfg, req.params.scene_id, body.model || undefined, body.style || undefined
+          );
+          if (!out.ok) {
+            if (out.error === 'scene not found') return response.notFound(res, '场景不存在');
+            return response.badRequest(res, out.error);
+          }
+          return response.success(res, { message: '单图提示词已生成', polished_prompt_single: out.polished_prompt_single });
+        }
         const out = await sceneService.generateScenePromptOnly(
           db, log, cfg, req.params.scene_id, body.model || undefined, body.style || undefined
         );
@@ -25,7 +35,7 @@ function routes(db, log, cfg) {
           if (out.error === 'scene not found') return response.notFound(res, '场景不存在');
           return response.badRequest(res, out.error);
         }
-        response.success(res, { message: '提示词已生成', polished_prompt: out.polished_prompt });
+        response.success(res, { message: '九宫格提示词已生成', polished_prompt: out.polished_prompt });
       } catch (err) {
         log.error('scenes generatePrompt', { error: err.message });
         response.internalError(res, err.message);
@@ -91,16 +101,21 @@ function routes(db, log, cfg) {
         const body = req.body || {};
         const sceneId = body.scene_id != null ? Number(body.scene_id) : null;
         if (sceneId == null) return response.badRequest(res, '缺少 scene_id');
-        const out = await sceneService.generateSceneFourViewImage(
-          db, log, cfg, sceneId, body.model || undefined, body.style || undefined
-        );
+        const useGrid = body.use_grid != null ? !!body.use_grid : !!body.use_quad_grid;
+        const out = useGrid
+          ? await sceneService.generateSceneFourViewImage(
+              db, log, cfg, sceneId, body.model || undefined, body.style || undefined
+            )
+          : await sceneService.generateSceneSingleImage(
+              db, log, cfg, sceneId, body.model || undefined, body.style || undefined
+            );
         if (!out.ok) {
           if (out.error === 'scene not found') return response.notFound(res, '场景不存在');
           if (out.error === 'unauthorized') return response.notFound(res, '剧集不存在或无权限');
           return response.badRequest(res, out.error);
         }
         response.success(res, {
-          message: '场景四视图生成任务已提交',
+          message: useGrid ? '场景九宫格生成任务已提交' : '场景单图生成任务已提交',
           image_generation: out.image_generation,
         });
       } catch (err) {
@@ -146,7 +161,7 @@ function routes(db, log, cfg) {
           if (out.error === 'unauthorized') return response.notFound(res, '剧集不存在或无权限');
           return response.badRequest(res, out.error);
         }
-        response.success(res, { message: '场景四视图生成任务已提交', image_generation: out.image_generation });
+        response.success(res, { message: '场景九宫格生成任务已提交', image_generation: out.image_generation });
       } catch (err) {
         log.error('scenes generate-four-view-image', { error: err.message });
         response.internalError(res, err.message);

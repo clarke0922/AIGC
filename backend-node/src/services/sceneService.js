@@ -156,9 +156,9 @@ function buildSceneFourViewImagePrompt(fourViewDescription, styleEn, styleZh) {
   const en = (styleEn || '').trim();
 
   const styleLines = [];
-  if (zh) styleLines.push(`【画风·最高优先级】四格统一：${zh}`);
-  if (en && en !== zh) styleLines.push(`MANDATORY ART STYLE (all 4 panels): ${en}.`);
-  else if (en && !zh) styleLines.push(`MANDATORY ART STYLE (all 4 panels): ${en}.`);
+  if (zh) styleLines.push(`【画风·最高优先级】九宫格统一：${zh}`);
+  if (en && en !== zh) styleLines.push(`MANDATORY ART STYLE (all 9 panels): ${en}.`);
+  else if (en && !zh) styleLines.push(`MANDATORY ART STYLE (all 9 panels): ${en}.`);
   const styleHeader = styleLines.length ? `${styleLines.join('\n')}\n\n` : '';
 
   const tailParts = [];
@@ -190,7 +190,7 @@ function buildSceneSingleImagePrompt(description, styleEn, styleZh) {
 }
 
 /**
- * 仅生成（并保存）场景四视图完整图片提示词到 scenes.polished_prompt，不触发图片生成。
+ * 仅生成（并保存）场景九宫格完整图片提示词到 scenes.polished_prompt，不触发图片生成。
  * 与角色的 generateCharacterPromptOnly 对应：
  *   Step 1: 文字AI将 location/time/prompt(原始描述) → fourViewDescription
  *   Step 2: 拼接布局指令 + fourViewDescription + 硬性要求 → polished_prompt（完整英文图片提示词）
@@ -219,9 +219,9 @@ async function generateScenePromptOnly(db, log, cfg, sceneId, modelName, style) 
   ].filter(Boolean).join('\n') || location || '未知场景';
 
   const systemPrompt = promptI18n.getScenePolishPrompt(fourViewCfg);
-  const userPrompt = `请根据以下场景信息，生成四格场景参考图的提示词：\n\n${sceneDesc}`;
+  const userPrompt = `请根据以下场景信息，生成九宫格场景参考图的提示词：\n\n${sceneDesc}`;
 
-  log.info('[场景提示词] Step1 开始生成四视图描述', { scene_id: sceneId, location, time });
+  log.info('[场景提示词] Step1 开始生成九宫格描述', { scene_id: sceneId, location, time });
 
   let fourViewDescription;
   try {
@@ -251,7 +251,7 @@ async function generateScenePromptOnly(db, log, cfg, sceneId, modelName, style) 
 
 /**
  * 仅生成（并保存）场景单图完整图片提示词到 scenes.polished_prompt_single，不触发图片生成。
- * 与 generateScenePromptOnly 对应（四视图版本）。
+ * 与 generateScenePromptOnly 对应（九宫格版本）。
  */
 async function generateSceneSinglePromptOnly(db, log, cfg, sceneId, modelName, style) {
   const sceneRow = db.prepare(
@@ -324,7 +324,7 @@ async function generateSceneFourViewImage(db, log, cfg, sceneId, modelName, styl
 
   if (sceneRow.polished_prompt && String(sceneRow.polished_prompt).trim()) {
     imagePrompt = String(sceneRow.polished_prompt).trim();
-    log.info('[场景四视图] 使用已保存的 polished_prompt，跳过文字AI', { scene_id: sceneId });
+    log.info('[场景九宫格] 使用已保存的 polished_prompt，跳过文字AI', { scene_id: sceneId });
   } else {
     const location = (sceneRow.location || '').toString().trim();
     const time = (sceneRow.time || '').toString().trim();
@@ -337,46 +337,48 @@ async function generateSceneFourViewImage(db, log, cfg, sceneId, modelName, styl
     const inputText = sceneDesc || (location || '未知场景');
 
     const systemPrompt = promptI18n.getScenePolishPrompt(mergedCfg);
-    const userMsg = `请根据以下场景信息，生成四格场景参考图的提示词：\n\n${inputText}`;
+    const userMsg = `请根据以下场景信息，生成九宫格场景参考图的提示词：\n\n${inputText}`;
 
-    log.info('[场景四视图] Step1 开始生成提示词', { scene_id: sceneId, location, time });
+    log.info('[场景九宫格] Step1 开始生成提示词', { scene_id: sceneId, location, time });
 
-    let fourViewDescription;
+    let gridDescription;
     try {
-      fourViewDescription = await aiClient.generateText(db, log, 'text', userMsg, systemPrompt, {
+      gridDescription = await aiClient.generateText(db, log, 'text', userMsg, systemPrompt, {
         model: modelName || undefined,
         max_tokens: 4000,
       });
     } catch (err) {
-      log.error('[场景四视图] Step1 文本AI失败，降级为直接使用场景描述', { error: err.message });
-      fourViewDescription = inputText;
+      log.error('[场景九宫格] Step1 文本AI失败，降级为直接使用场景描述', { error: err.message });
+      gridDescription = inputText;
     }
 
     const styleEn = (mergedCfg.style.default_style_en || mergedCfg.style.default_style || '').trim();
     const styleZh = (mergedCfg.style.default_style_zh || '').trim();
-    imagePrompt = buildSceneFourViewImagePrompt(fourViewDescription, styleEn, styleZh);
+    imagePrompt = buildSceneFourViewImagePrompt(gridDescription, styleEn, styleZh);
 
-    // 顺带保存，供下次复用
     try {
       db.prepare('UPDATE scenes SET polished_prompt = ?, updated_at = ? WHERE id = ?').run(
         imagePrompt, new Date().toISOString(), Number(sceneId)
       );
     } catch (_) {}
 
-    log.info('[场景四视图] Step1 完成，开始Step2生图', { scene_id: sceneId });
+    log.info('[场景九宫格] Step1 完成，开始Step2生图', { scene_id: sceneId });
   }
+
+  const gridContract = promptI18n.getSceneGenerateImagePrompt();
+  if (!imagePrompt.includes(gridContract)) imagePrompt += '\n\n' + gridContract;
 
   const imageGen = imageClient.createAndGenerateImage(db, log, {
     drama_id: sceneRow.drama_id,
-    scene_id: sceneId,
+    scene_id: sceneRow.id,
     prompt: imagePrompt,
     model: modelName || undefined,
-    size: '1792x1024',
+    size: '1024x1024',
     quality: 'standard',
     provider: 'openai',
   });
 
-  log.info('[场景四视图] Step2 图片生成任务已提交', { scene_id: sceneId, image_gen_id: imageGen?.id });
+  log.info('[场景九宫格] Step2 图片生成任务已提交', { scene_id: sceneId, image_gen_id: imageGen?.id });
 
   return { ok: true, image_generation: imageGen };
 }

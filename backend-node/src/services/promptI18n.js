@@ -1073,40 +1073,60 @@ ${isEnglish(cfg) ? "OUTPUT LANGUAGE: Write all descriptions and section headings
 
 }
 
+function getSceneGridContract() {
+  return `KSR SCENE 3×3 REFERENCE SHEET — mandatory layout and continuity contract (override any conflicting single illustration, poster, split-screen or 2×2 layout):
+- Create ONE square photographic scene reference sheet in an exact 3×3 grid: nine equal panels, thin dark dividers, legible panel labels PANEL 01 through PANEL 09. No people, no characters, no silhouettes, no human shadows, no story action.
+- Panel visual hooks: PANEL 01 WIDE ESTABLISHING (eye-level full space and boundaries); PANEL 02 MAIN ACTIVITY ZONE (usable standing/seating/action area, no people); PANEL 03 SIGNATURE MATERIAL DETAIL; PANEL 04 HIGH ANGLE showing layout; PANEL 05 LOW ANGLE showing vertical structure; PANEL 06 SIDE DEPTH VIEW / corridor or receding perspective; PANEL 07 ENTRANCE OR EDGE VIEW; PANEL 08 WEATHER / LIGHT CONDITION on architecture and materials; PANEL 09 REVERSE ANGLE looking back through the same space.
+- All nine panels depict the same location and the same core concept. Preserve architecture, terrain, ground materials, key furnishings, props, vegetation, color palette, time of day, weather, light direction and color temperature; only camera height, focal length and viewing angle may change.
+- PHOTO TONE must be handled as one unified description: light quality, source, direction, atmosphere, contrast and palette remain consistent across panels. Use absolute visual language; no vague "maybe", "approximately", or "seems like".
+- MATERIAL TRUTH: describe the physical behavior of every material, such as rough stone, polished metal, damp wood, dusty plaster, weathered brick, reflective glass, dry soil or worn fabric. Integrate color codes into descriptive prose rather than listing a separate swatch strip.
+- AVOID instructions must be specific to this location and grouped by SPACE / MATERIAL / LIGHT / FORMAT: no wrong era, no architectural mismatch, no duplicated room layout, no warm/cool color-temperature jump, no people, no random text, no logo, no watermark, no tenth panel, no poster crop, no unequal panel size.`;
+}
+
 /**
- * 场景四视图提示词生成：文本AI将场景描述转化为四格场景参考图提示词
+ * KSR 场景九宫格提示词生成：文本 AI 将场景描述转化为 3×3 多角度场景参考图提示词。
  */
 function getScenePolishPrompt(cfg) {
   const style = isEnglish(cfg) ? styleTextEnForImage(cfg) : styleTextZhForPolish(cfg);
-  return `# 场景四视图参考图生成器
+  return `# KSR 场景九宫格参考图提示词生成器
 
 ## 你的身份
-你是专业的影视美术设计师，负责将场景描述转换为AI绘图标准四视图参考图提示词。
+你是专业影视美术指导、场景概念设计师与 GPT Image 提示词作者，负责把场景信息转换为严格的 **3×3 九宫格多角度场景参考图**。它用于后续分镜空间、色调、材质和光影一致性，不是单张插画、海报或剧情截图。
 
-## 核心规则
+## 核心原则
 
-### 提取与统一
-- **完全统一**：四格图中的建筑结构、地面材质、主要陈设、光线/时段必须完全一致，只有焦距与机位角度可变
-- **禁止出现**：角色、人物剪影、文字标注、水印
-- **真实可信**：建筑风格、材质、植被必须符合场景所属时代和地域${style ? '\n- **画风风格**：' + style : ''}
+### 参考图 4 原则
+- **色卡融入叙述**：保留明确色号，但要写成“灰褐色石墙 #B5B0A8”这类材质描述，不单独列色卡表。
+- **PHOTO TONE 一段压完**：光源、方向、色温、天气、空气感、反差和氛围必须集中成一段完整描述，九个面板统一遵守。
+- **AVOID 精简且场景特定**：否定项按 SPACE / MATERIAL / LIGHT / FORMAT 分组，只写本场景真实可能犯的错误，不堆通用否定词。
+- **MATERIAL TRUTH**：每种关键材质写清物理状态，例如粗糙、光滑、湿润、风化、锈蚀、磨损、积灰、反光或哑光。
 
-### 四格内容设计原则
-- 第1格用最宽视角展示整体空间关系，不遗漏边界
-- 第2格聚焦人物最常活动的区域（对话区/行动区），中景视角
-- 第3格选择最具场景辨识度的标志性细节进行特写
-- 第4格使用与第1格不同的机位角度（如微俯/高俯/仰视/斜角），展示同一场景的空间纵深与结构关系
+### 九宫格 4 原则
+- **panel 视觉钩子**：每个面板用 1–2 句话锚定该角度最重要的空间或材质重点。
+- **色卡统一 PRESERVE**：九个面板色温和材质颜色一致，不许面板之间跳色。
+- **贯穿核心概念**：九格围绕同一个地点、同一时代、同一空间功能、同一光线条件展开。
+- **绝对语言**：用确定的画面语言，不写“可能、大约、似乎、类似”。
 
-### 避免与生图侧重复
-- **不要**写四宫格顺序、无人物、无文字水印、四格建筑一致等与版面/负面清单相关的长段说明（生图 API 会统一注入）；只写场景可视信息与各格差异化镜头内容
+### 统一与限制
+- 九个面板必须是同一场景：建筑结构、地形、地面材质、主要陈设、标志物、植被、天气、时段和光源方向完全连续。
+- 只允许改变机位高度、焦距、观察方向和景别；不允许把场景改成另一个房间或另一个时间。
+- 禁止人物、角色、人影、剧情动作、字幕、水印、logo、随机文字、额外第 10 格。
+- 建筑、道具、植被和材质必须符合时代与地域；不要凭空加入现代物件。
+- 每个面板都要有明确镜头用途，避免九格只是重复构图。${style ? '\n- **画风风格（只影响渲染质感，不改变九宫格版式）**：' + style : ''}
 
-## 四格固定顺序
+## 九宫格固定内容
 
-| 位置 | 视图类型 | 构图与功能 |
-|------|---------|-----------|
-| 第1格 | 全景建立镜头 | 最宽视角，展示完整空间格局、建筑边界、环境背景，无人物 |
-| 第2格 | 主体焦点区域 | 主要活动区域中景，清晰展示人物站位空间、地面细节、主要陈设 |
-| 第3格 | 环境特征细节 | 场景最具辨识度的标志性元素特写（建筑纹理、招牌、装饰品等） |
-| 第4格 | 角度变体 | 相同场景、相同光线/时段，但不同机位角度（如微俯/高俯/仰视/斜角），展示空间纵深 |
+| 面板 | 标签 | 内容 |
+|------|------|------|
+| 1 | PANEL 01 WIDE ESTABLISHING | 平视全景建立镜头，完整交代空间边界、地形/建筑轮廓和整体色调 |
+| 2 | PANEL 02 MAIN ACTIVITY ZONE | 主要活动区域中景，展示可站立/对话/行动的空间、地面和关键陈设，但不出现人物 |
+| 3 | PANEL 03 SIGNATURE MATERIAL DETAIL | 最具辨识度的材质或建筑部件特写，写清纹理、磨损、颜色和物理状态 |
+| 4 | PANEL 04 HIGH ANGLE | 高角度/微俯视角，展示平面布局、动线和空间关系 |
+| 5 | PANEL 05 LOW ANGLE | 低角度，展示梁柱、屋顶、山体、高楼等垂直结构与尺度 |
+| 6 | PANEL 06 SIDE DEPTH VIEW | 侧面纵深视角，利用走廊、街道、林间、门洞或家具排列表现透视 |
+| 7 | PANEL 07 ENTRANCE OR EDGE | 入口、边界、窗洞、河岸、门口或场景边缘，交代内外关系 |
+| 8 | PANEL 08 WEATHER / LIGHT CONDITION | 同一光线与天气如何落在建筑/材质上：雾、雨痕、灰尘、光斑、阴影等 |
+| 9 | PANEL 09 REVERSE ANGLE | 反向机位回看同一空间，验证背向结构、出口和空间连续性 |
 
 ## 时代场景匹配表
 
@@ -1114,44 +1134,66 @@ function getScenePolishPrompt(cfg) {
 |------|---------|
 | 古风/仙侠 | 中国古代建筑，青砖黑瓦，红柱彩梁，庭院回廊 |
 | 武侠 | 江湖风貌，茶馆客栈，山野林间，镖局武馆 |
-| 西幻/奇幻 | 欧洲中世纪，石砌城堡，酒馆，森林，魔法元素 |
-| 现代都市 | 现代建筑，办公室，咖啡厅，街道，居家空间 |
+| 西幻/奇幻 | 欧洲中世纪石砌城堡、酒馆、森林、写实魔法痕迹 |
+| 现代都市 | 现代建筑、办公室、咖啡厅、街道、居家空间 |
+
+${getSceneGridContract()}
 
 ## 输出格式
 
-【场景基础设定】
-场景类型: 室内/室外/自然场景
-地点特征: 建筑风格，主要材质，空间规模，标志性元素
-默认光线: 自然光/人工光，色温，时段
-气氛基调: 整体色调倾向，视觉情绪
+【SCENE CORE】
+地点名称、室内/室外/自然场景、时代地域、空间功能、核心视觉概念。
 
-【第1格-全景建立镜头】
-镜头高度，视角（地面平视/微俯/高俯），场景全貌描述
-建筑/地形轮廓，背景天空/远景，整体色调
-无人物，无道具遮挡，展示完整空间边界
+【COLOR / MATERIAL TRUTH】
+用自然描述写清主要材质和色号：墙面、地面、金属、木材、织物、植被等，以及粗糙/光滑/湿润/风化等真实物理状态。
 
-【第2格-主体焦点区域】
-活动核心区、地面与陈设；中景、光线落点；功能（对话区/打斗区等，勿复述「无人物」等禁令）
+【PHOTO TONE】
+一段话完整写清光源、方向、色温、天气、空气质感、反差和氛围；九个面板统一执行。
 
-【第3格-环境特征细节】
-标志性元素的材质/纹理/色彩；特写与景深；该元素的指示意义
+【PANEL 01 WIDE ESTABLISHING】
+1–2 句具体画面钩子。
 
-【第4格-角度变体】
-与第1格不同的机位高度与视角（如微俯/高俯/仰视/斜角）；保持与前三格相同的光线/时段/天气；展示空间纵深与建筑结构关系
+【PANEL 02 MAIN ACTIVITY ZONE】
+1–2 句具体画面钩子。
 
-${isEnglish(cfg) ? "OUTPUT LANGUAGE: Write all descriptions and section headings in English; translate the template headings above. Preserve character names and required technical labels." : "输出语言：所有描述使用中文，保留角色名及要求的技术标签。"}`;
+【PANEL 03 SIGNATURE MATERIAL DETAIL】
+1–2 句具体画面钩子。
+
+【PANEL 04 HIGH ANGLE】
+1–2 句具体画面钩子。
+
+【PANEL 05 LOW ANGLE】
+1–2 句具体画面钩子。
+
+【PANEL 06 SIDE DEPTH VIEW】
+1–2 句具体画面钩子。
+
+【PANEL 07 ENTRANCE OR EDGE】
+1–2 句具体画面钩子。
+
+【PANEL 08 WEATHER / LIGHT CONDITION】
+1–2 句具体画面钩子。
+
+【PANEL 09 REVERSE ANGLE】
+1–2 句具体画面钩子。
+
+【AVOID】
+按 SPACE / MATERIAL / LIGHT / FORMAT 四类列出本场景特定否定项，简短具体。
+
+${isEnglish(cfg) ? "OUTPUT LANGUAGE: Write all descriptions and section headings in English; translate the template headings above. Preserve required technical labels." : "输出语言：所有描述使用中文，保留 PANEL 等技术标签。"}`;
 }
 
 /**
- * 场景四视图图片生成：图片AI的system prompt（简短；画风由用户消息首部强调）
+ * KSR 场景九宫格图片生成：图片 AI 的硬性 3×3 版式契约，画风由用户消息首部强调。
  */
 function getSceneGenerateImagePrompt() {
   return `Scene environment reference sheet — image only, no text reply.
 
-ONE image: 2×2 grid. TL=establishing wide (full space, boundaries, context). TR=main activity zone medium shot (floor, key furnishings). BL=signature environmental detail close-up. BR=alternate angle view (same place, same lighting/time/weather, different camera angle such as elevated/low/high/oblique).
+${getSceneGridContract()}
 
-No people: no characters, silhouettes, human shadows. No text/labels/watermarks/location lettering. Same architecture, terrain, ground materials, and key props across all panels; same light, time, and weather; only focal length and camera angle may change. Unified palette and depth; high detail. Follow ART STYLE / 画风 block at the start of the user message if present.`;
+Use photorealistic location-reference quality unless the user prompt gives a different mandatory art style. Follow ART STYLE / 画风 / MANDATORY ART STYLE at the start of the user message when present, but never let it change the exact 3×3 layout, nine panel labels, continuity, no-people rule, or unified PHOTO TONE.`;
 }
+
 
 /**
  * 场景单图提示词生成：图片AI的system prompt（单图场景，非四宫格）
@@ -1629,6 +1671,7 @@ module.exports = {
   getRoleAnatomyContract,
   getRoleGenerateImagePrompt,
   getScenePolishPrompt,
+  getSceneGridContract,
   getScenePolishPromptSingle,
   getSceneGenerateImagePrompt,
   getSceneGenerateSingleImagePrompt,

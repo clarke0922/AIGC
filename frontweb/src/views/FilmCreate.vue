@@ -720,7 +720,7 @@
                 <el-button size="small" @click="showSceneLibrary = true">本剧场景库</el-button>
               </div>
               <div class="scene-gen-mode" style="margin: 8px 0; font-size: 13px;">
-                <el-checkbox v-model="sceneUseQuadGrid">生成四宫格场景（默认单图）</el-checkbox>
+                <el-checkbox v-model="sceneUseQuadGrid">生成九宫格场景（默认单图）</el-checkbox>
               </div>
               <div class="asset-list asset-list-two">
                 <div v-for="scene in scenes" :key="scene.id" class="asset-item asset-item-left-right">
@@ -788,7 +788,7 @@
                       </div>
                     </div>
                     <div class="asset-cover-actions">
-                      <el-tooltip :content="sceneUseQuadGrid ? '四宫格场景（正/侧/俯/仰）' : '单图场景'" placement="top">
+                      <el-tooltip :content="sceneUseQuadGrid ? '九宫格场景（多角度/材质/光线）' : '单图场景'" placement="top">
                         <el-button type="primary" size="small" :loading="generatingSceneIds.has(scene.id)" @click="onGenerateSceneImage(scene, sceneUseQuadGrid)">
                           <el-icon v-if="!generatingSceneIds.has(scene.id)"><MagicStick /></el-icon>
                           AI 生成
@@ -1768,7 +1768,7 @@
           </template>
           <div style="width:100%">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-              <span style="font-size:12px;color:#909399">AI 润色后的最终提示词，生成四视图图片时直接使用；可手动修改</span>
+              <span style="font-size:12px;color:#909399">AI 润色后的最终提示词，生成九宫格图片时直接使用；可手动修改</span>
               <el-button
                 size="small"
                 :loading="editCharacterPromptGenerating"
@@ -1956,7 +1956,7 @@
           <el-input v-model="editSceneForm.time" placeholder="如：白天、傍晚" />
         </el-form-item>
         <el-form-item label="场景描述">
-          <el-input v-model="editSceneForm.prompt" type="textarea" :autosize="{ minRows: 3, maxRows: 8 }" placeholder="场景的简要描述，供 AI 生成四视图时参考" />
+          <el-input v-model="editSceneForm.prompt" type="textarea" :autosize="{ minRows: 3, maxRows: 8 }" placeholder="场景的简要描述，供 AI 生成九宫格时参考" />
         </el-form-item>
         <el-form-item v-if="editSceneForm.id">
           <template #label>
@@ -1964,32 +1964,32 @@
           </template>
           <div style="width:100%">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-              <span style="font-size:12px;color:#909399">单图场景的完整图片提示词（不含四宫格布局），生图时直接使用；可手动修改</span>
+              <span style="font-size:12px;color:#909399">单图场景的完整图片提示词（不含九宫格布局），生图时直接使用；可手动修改</span>
               <el-button size="small" :loading="editScenePromptGenerating" @click="doGenerateSceneSinglePrompt">重新生成提示词</el-button>
             </div>
             <el-input
               v-model="editSceneForm.polished_prompt_single"
               type="textarea"
               :autosize="{ minRows: 5, maxRows: 16 }"
-              placeholder="单图场景提示词，点击场景列表的「AI 生成」按钮（不勾选四宫格）后会自动生成"
+              placeholder="单图场景提示词，点击场景列表的「AI 生成」按钮（不勾选九宫格）后会自动生成"
               style="font-size:12px"
             />
           </div>
         </el-form-item>
         <el-form-item v-if="editSceneForm.id">
           <template #label>
-            <span style="font-size:12px;line-height:1.4;white-space:normal;word-break:break-all;display:inline-block;width:90px">四视图提示词</span>
+            <span style="font-size:12px;line-height:1.4;white-space:normal;word-break:break-all;display:inline-block;width:90px">九宫格提示词</span>
           </template>
           <div style="width:100%">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-              <span style="font-size:12px;color:#909399">AI 生成的完整四视图图片提示词，生图时直接使用；可手动修改</span>
+              <span style="font-size:12px;color:#909399">AI 生成的完整九宫格图片提示词，生图时直接使用；可手动修改</span>
               <el-button size="small" :loading="editScenePromptGenerating" @click="doGenerateScenePrompt">重新生成提示词</el-button>
             </div>
             <el-input
               v-model="editSceneForm.polished_prompt"
               type="textarea"
               :autosize="{ minRows: 5, maxRows: 16 }"
-              :placeholder="editScenePromptGenerating ? 'AI 正在生成四视图提示词，请稍候…' : '点击「重新生成提示词」由 AI 自动生成，或直接在此输入'"
+              :placeholder="editScenePromptGenerating ? 'AI 正在生成九宫格提示词，请稍候…' : '点击「重新生成提示词」由 AI 自动生成，或直接在此输入'"
               :disabled="editScenePromptGenerating"
               style="font-size:12px"
             />
@@ -3071,7 +3071,7 @@ const charactersBlockCollapsed = ref(false)
 const propsBlockCollapsed = ref(false)
 const scenesBlockCollapsed = ref(false)
 const sceneUseQuadGrid = ref(false)
-const propUseQuadGrid = ref(false)  // 道具四视图（与场景四宫格同级选项）
+const propUseQuadGrid = ref(false)  // 道具四视图（与场景九宫格同级选项）
 
 // 分镜行内编辑状态（按 storyboard id 存储）
 // navCollapsed/storyboardMenuExpanded/toggleNav → 已移至 useNavigation composable
