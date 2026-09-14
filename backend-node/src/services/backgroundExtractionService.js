@@ -35,26 +35,69 @@ async function translatePromptToChinese(db, log, model, prompt) {
   return (text || '').toString().trim();
 }
 
+function firstText(...values) {
+  for (const value of values) {
+    const text = value == null ? '' : String(value).trim();
+    if (text) return text;
+  }
+  return '';
+}
+
+function splitSceneKey(sceneKey) {
+  const text = firstText(sceneKey);
+  if (!text) return { location: '', time: '' };
+  const match = text.match(/^(.*?)[，,]\s*(清晨|早上|上午|中午|下午|傍晚|黄昏|晚上|夜晚|深夜|凌晨|白天|夜间|雨夜|雪夜|[\d一二三四五六七八九十]+点(?:半)?(?:左右)?)$/);
+  if (match) return { location: match[1].trim(), time: match[2].trim() };
+  return { location: text, time: '' };
+}
+
+function normalizeBackgroundItem(item) {
+  if (!item || typeof item !== 'object') return null;
+  const keyLocation = splitSceneKey(item.scene_key ?? item.sceneName ?? item.scene_name ?? item.name ?? item.title);
+  const location = firstText(item.location, item.place, item.scene_location, keyLocation.location);
+  const time = firstText(item.time, item.time_of_day, item.scene_time, keyLocation.time);
+  const prompt = firstText(
+    item.prompt,
+    item.scene_prompt,
+    item.background_prompt,
+    item.image_prompt,
+    item.description,
+    item.scene_description,
+    item.scene
+  );
+  if (!location && !time && !prompt) return null;
+  return { location, time, prompt };
+}
+
 async function extractBackgroundsFromScript(db, cfg, log, scriptContent, dramaId, model, style) {
   if (!scriptContent || !scriptContent.trim()) return [];
   const systemPrompt = promptI18n.getSceneExtractionPrompt(cfg, style);
   const prompt = (promptI18n.getLanguage(cfg) === 'en' ? '[Script Content]\n' : '【剧本内容】\n') + scriptContent;
-  console.log('systemPrompt', systemPrompt);
-  console.log('prompt', prompt);
-  const text = await aiClient.generateText(db, log, 'text', prompt, systemPrompt, { scene_key: 'scene_extraction', model: model || undefined, temperature: 0.7 });
-  let list = [];
+  const text = await aiClient.generateText(
+    db,
+    log,
+    'text',
+    prompt,
+    systemPrompt,
+    {
+      scene_key: 'scene_extraction',
+      model: model || undefined,
+      temperature: 0.7,
+      max_tokens: 8192,
+      min_max_tokens: 8192,
+    }
+  );
+  let parsed;
   try {
-    const parsed = safeParseAIJSON(text, log);
-    list = extractFirstArray(parsed) || [];
-  } catch (_) {
-    list = [];
+    parsed = safeParseAIJSON(text, log);
+  } catch (err) {
+    throw new Error('解析 AI 返回的场景 JSON 失败: ' + err.message);
   }
-  return list.map((b) => ({
-    location: b.location || '',
-    time: b.time || '',
-    prompt: b.prompt || '',
-    atmosphere: b.atmosphere,
-  }));
+  const list = extractFirstArray(parsed);
+  if (!Array.isArray(list)) throw new Error('AI 未返回场景数组');
+  const normalized = list.map(normalizeBackgroundItem).filter(Boolean);
+  if (!normalized.length) throw new Error('AI 返回的场景字段为空或格式无法识别');
+  return normalized;
 }
 
 async function processBackgroundExtraction(db, cfg, log, taskID, episodeId, model, style, language) {
@@ -209,4 +252,6 @@ function extractBackgroundsForEpisode(db, cfg, log, episodeId, model, style, lan
 
 module.exports = {
   extractBackgroundsForEpisode,
+  processBackgroundExtraction,
+  normalizeBackgroundItem,
 };
