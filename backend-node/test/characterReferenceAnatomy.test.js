@@ -5,13 +5,20 @@ const ai = require('../src/services/aiClient');
 const images = require('../src/services/imageClient');
 const characters = require('../src/services/characterLibraryService');
 
-test('role polish and image prompts share front/back anatomy constraints in both languages', () => {
+test('role polish and image prompts use the KSR 2x2 character sheet contract in both languages', () => {
   const contract = prompts.getRoleAnatomyContract();
-  assert.match(contract, /no visible face/);
-  assert.match(contract, /never stretch or squash/);
-  assert.match(contract, /two arms and two legs/);
+  assert.match(contract, /exact 2×2 grid/);
+  assert.match(contract, /FACE FRONT/);
+  assert.match(contract, /FACE SIDE/);
+  assert.ok(contract.includes('BODY FRONT (NO FACE)'));
+  assert.match(contract, /#606570/);
+  assert.match(contract, /45-degree side-rim/);
   for (const language of ['zh', 'en']) {
-    assert.ok(prompts.getRolePolishPrompt({ app: { language }, style: {} }).includes(contract));
+    const polished = prompts.getRolePolishPrompt({ app: { language }, style: {} });
+    assert.ok(polished.includes(contract));
+    assert.match(polished, /FACE FRONT/);
+    assert.ok(polished.includes('BODY FRONT (NO FACE)'));
+    assert.match(polished, /PHOTO TONE \/ MATERIAL TRUTH/);
   }
   assert.ok(prompts.getRoleGenerateImagePrompt().includes(contract));
 });
@@ -52,8 +59,9 @@ test('saved, fresh and fallback character prompts submit anatomy constraints wit
   for (const request of requests) {
     assert.equal(request.prompt.split(prompts.getRoleAnatomyContract()).length, 2);
     assert.equal(request.character_id, 2);
+    assert.equal(request.size, '1024x1024');
   }
   assert.match(requests[1].prompt, /MANDATORY ART STYLE \(all panels\): ink drawing/);
-  assert.doesNotMatch(requests[1].prompt, /all 4 panels|四格统一/);
+  assert.match(requests[0].prompt, /exact 2×2 grid/);
   assert.match(requests[2].prompt, /蓝色长袍/);
 });

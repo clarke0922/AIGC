@@ -619,7 +619,7 @@ async function generateCharacterFourViewImage(db, log, cfg, characterId, modelNa
     character_id: charRow.id,
     prompt: imagePrompt,
     model: modelName || undefined,
-    size: '1792x1024',
+    size: '1024x1024',
     quality: 'standard',
     provider: 'openai',
     user_negative_prompt: userNeg || undefined,
