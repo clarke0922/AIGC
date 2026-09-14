@@ -24,7 +24,7 @@ test('maps 2K and 4K options to exact long-edge pixels', () => {
   assert.deepEqual(brainstorm.getResolutionDimensions('9:16', '4k'), { width: 2160, height: 3840, ratio: '9:16' });
 });
 
-test('generates, saves and upscales brainstorm image to requested size', async (t) => {
+test('generates with text-to-image model config and upscales to requested size', async (t) => {
   const sharp = require('sharp');
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'brainstorm-'));
   const sourceBuffer = await sharp({
@@ -34,7 +34,11 @@ test('generates, saves and upscales brainstorm image to requested size', async (
   fs.mkdirSync(sourceDir, { recursive: true });
   fs.writeFileSync(path.join(sourceDir, 'source.jpg'), sourceBuffer);
 
-  t.mock.method(imageClient, 'callImageApi', async () => ({ image_url: 'https://example.com/brainstorm.jpg' }));
+  let imageRequest = null;
+  t.mock.method(imageClient, 'callImageApi', async (_db, _log, request) => {
+    imageRequest = request;
+    return { image_url: 'https://example.com/brainstorm.jpg' };
+  });
   t.mock.method(uploadService, 'downloadImageToLocal', async () => 'brainstorms/source.jpg');
 
   const result = await brainstorm.generateBrainstormImage(
@@ -50,4 +54,5 @@ test('generates, saves and upscales brainstorm image to requested size', async (
   assert.equal(result.width, 2048);
   assert.equal(result.height, 1152);
   assert.match(result.image_url, /^\/static\/brainstorms\//);
+  assert.equal(imageRequest.imageServiceType, 'image');
 });

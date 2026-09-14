@@ -95,7 +95,7 @@ async function generateBrainstormImage(db, log, config, req) {
     prompt: fullPrompt,
     size: `${generation.width}x${generation.height}`,
     quality: 'hd',
-    imageServiceType: 'brainstorm',
+    imageServiceType: 'image',
     user_negative_prompt: 'CGI, 3D render, game screenshot, illustration, anime, plastic texture, text, letters, logo, watermark, camera movement',
   });
   if (result.error) throw new Error(result.error);
