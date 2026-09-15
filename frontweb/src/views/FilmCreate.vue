@@ -3551,10 +3551,10 @@ async function doExtractFromRef(type) {
     if (!refImage) return
     extractingSceneDesc.value = true
     try {
-      const name = editSceneForm.value?.name || ''
+      const name = editSceneForm.value?.location || ''
       const res = await uploadAPI.extractDescriptionFromImage('scene', refImage.dataUrl, name)
       if (res?.description && editSceneForm.value) {
-        editSceneForm.value.description = res.description
+        editSceneForm.value.prompt = res.description
         ElMessage.success('已从参考图提取场景描述')
       }
     } catch (e) {

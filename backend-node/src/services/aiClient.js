@@ -251,6 +251,31 @@ function getModelFromConfig(config, preferredModel) {
   return models[0] || 'gpt-3.5-turbo';
 }
 
+function looksLikeVisionModel(model) {
+  const name = String(model || '').toLowerCase();
+  if (!name || /seedream|seedance|speech|tts|asr|embedding|dall|imagen|stable|flux/i.test(name)) return false;
+  return /gpt-4o|chatgpt-4o|gemini(?![-a-z0-9.]*image)|claude-[3-9]|vision|visual|qwen[a-z0-9.\-]*vl(?:\b|[-])|(?:^|[-.])vl(?:\b|[-])|glm[-.]?4v|doubao[a-z0-9.\-]*vision/i.test(name);
+}
+
+function resolveVisionConfig(db, serviceType, preferredModel) {
+  if (preferredModel) {
+    const config = getConfigForModel(db, serviceType, preferredModel);
+    if (!config) return null;
+    const model = getModelFromConfig(config, preferredModel);
+    return looksLikeVisionModel(model) ? { config, model } : null;
+  }
+  const configs = aiConfigService.listConfigs(db, serviceType).filter((item) => item.is_active);
+  for (const config of configs) {
+    const models = Array.isArray(config.model) ? config.model.filter(Boolean) : [];
+    const ordered = config.default_model && models.includes(config.default_model)
+      ? [config.default_model, ...models.filter((item) => item !== config.default_model)]
+      : models;
+    const model = ordered.find(looksLikeVisionModel);
+    if (model) return { config, model };
+  }
+  return null;
+}
+
 /**
  * 从 ai_model_map 表查找业务场景对应的模型配置
  * 返回 { config, modelOverride } 或 null（未配置时）
@@ -556,14 +581,13 @@ async function generateTextWithVision(db, log, serviceType, userPrompt, systemPr
     throw new Error('imageSource 必须包含 imageUrl 或 localAbsPath');
   }
 
-  // 复用 generateText 的配置查找逻辑
+  // 视觉提取只能使用真正支持图片输入的多模态模型，避免纯文本模型忽略图片后编造描述
   const { model: preferredModel, temperature = 0.3, max_tokens = 500 } = options;
-  let config = preferredModel
-    ? getConfigForModel(db, serviceType, preferredModel)
-    : getDefaultConfig(db, serviceType);
-  if (!config) config = getDefaultConfig(db, 'text');
-  if (!config) throw new Error(`未配置文本模型，请在「AI 配置」中添加 ${serviceType} 类型的配置`);
-  const model = getModelFromConfig(config, preferredModel);
+  const resolvedVision = resolveVisionConfig(db, serviceType, preferredModel);
+  if (!resolvedVision) {
+    throw new Error('AI vision 错误：当前文本模型不支持图片输入，请在「AI 配置」中配置支持视觉的模型（如 GPT-4o、Gemini、Qwen-VL、Doubao Vision）后重试');
+  }
+  const { config, model } = resolvedVision;
   const url = buildChatUrl(config);
 
   log.info('[Vision] 开始请求', {
@@ -583,8 +607,10 @@ async function generateTextWithVision(db, log, serviceType, userPrompt, systemPr
   const systemRole = isReasoningModel ? 'developer' : 'system';
 
   // 推理模型把 system 内容并入 user 消息前缀（部分代理不识别 developer role）
-  const mergedUserText = (systemPrompt && isReasoningModel)
-    ? `${systemPrompt}\n\n${userPrompt}`
+  const visionContract = '硬性要求：只能描述图片中真实可见的内容，禁止根据实体名称、上下文或常识猜测画面。如果无法看到、读取或解析图片，只能回复“无法查看图片”，不要输出任何描述。';
+  const effectiveSystemPrompt = systemPrompt ? `${systemPrompt}\n\n${visionContract}` : visionContract;
+  const mergedUserText = isReasoningModel
+    ? `${effectiveSystemPrompt}\n\n${userPrompt}`
     : userPrompt;
 
   // OpenAI vision 消息格式
@@ -592,7 +618,7 @@ async function generateTextWithVision(db, log, serviceType, userPrompt, systemPr
   const body = {
     model,
     messages: [
-      ...(systemPrompt && !isReasoningModel ? [{ role: systemRole, content: systemPrompt }] : []),
+      ...(!isReasoningModel ? [{ role: systemRole, content: effectiveSystemPrompt }] : []),
       {
         role: 'user',
         content: [
@@ -625,6 +651,10 @@ async function generateTextWithVision(db, log, serviceType, userPrompt, systemPr
     });
     throw new Error(`AI vision 返回内容为空（HTTP ${res.status}），原始响应：${(res.raw || '').slice(0, 200)}`);
   }
+  if (isImageUnavailableResponse(content)) {
+    log.warn('[Vision] 模型未能读取图片', { model, result_preview: content.slice(0, 120) });
+    throw new Error('AI vision 错误：模型未能读取图片内容（该模型可能不支持图片输入），请更换支持视觉的模型（GPT-4o、Gemini、Qwen-VL、Doubao Vision）后重试');
+  }
   log.info('[Vision] 请求成功', { model, elapsed_ms: Date.now() - startMs, result_len: content.length, result_preview: content.slice(0, 100) });
   return content.trim();
 }
@@ -651,7 +681,7 @@ const EXTRACT_PROMPTS = {
 - 体型：身形比例（高挑/中等/娇小）、体型特征（纤细/匀称/壮实）
 - 服装：款式、颜色、材质、层次搭配
 
-注意：如果你无法看清某些细节，请根据可见信息做合理推断，不要拒绝或道歉。
+注意：只描述图片中真实可见的信息，看不清的细节不要猜测或编造。
 输出要求：150-250字，直接输出描述，不加标题序号，像一份角色设定稿。`,
     user: (name) => `这是角色${name ? `"${name}"` : ''}的造型参考图，请提取图中的造型视觉要素，生成角色外貌设定文案（忽略背景）。`,
   },
@@ -723,6 +753,23 @@ function isRefusalResponse(text) {
   return refusalPatterns.some(p => p.test(text));
 }
 
+/** 检测模型是否明确表示看不到/读不到图片（纯文本模型收到 image_url 时常见回复，不能当描述写入） */
+function isImageUnavailableResponse(text) {
+  if (!text) return false;
+  const visionVerb = '(?:查看|看到|观看|读取|识别|访问|获取|解析|收到)';
+  const patterns = [
+    new RegExp(`无法\\s*(?:${visionVerb})(?:\\s*或\\s*(?:${visionVerb}))?\\s*(?:这|该|此|任何|实际)?\\s*(?:中的[^，。]{0,8})?\\s*(?:图片|图像|图|照片)`),
+    /(?:未|没能|没有)\s*(?:能|成功)?\s*(?:读取|看到|查看|接收|获取|解析|识别)\s*(?:到)?\s*(?:图片|图像|图|照片)/,
+    new RegExp(`(?:不能|没法|未能)\\s*(?:${visionVerb})(?:\\s*或\\s*(?:${visionVerb}))?[^。]{0,6}(?:图片|图像|图|照片)`),
+    /未成功读取到图像|读取到图像数据失败/,
+    /抱歉[，,].{0,12}(无法|不能).{0,12}(查看|看到|读取|识别|访问|获取).{0,8}(图片|图像|图|照片)/,
+    /(作为|身为)\s*AI.{0,20}(无法|不能|没法).{0,12}(查看|看到|读取|识别|访问)/,
+    /\bI(?:\s+am|'?m)?\s+(?:unable|cannot|can'?t)\b.{0,80}\b(?:see|view|access|read|process|analyz[ae])\b.{0,40}\b(?:image|picture|photo)\b/i,
+    /\bI\s+do\s+not\s+have\s+access\s+to.{0,30}\b(?:image|picture|photo)\b/i,
+  ];
+  return patterns.some(p => p.test(text));
+}
+
 module.exports = {
   getDefaultConfig,
   getConfigForModel,
@@ -736,5 +783,8 @@ module.exports = {
   IMAGE_PRIORITY_RULE,
   withRefPriorityRule,
   isRefusalResponse,
+  isImageUnavailableResponse,
+  looksLikeVisionModel,
+  resolveVisionConfig,
   postJSONWithTimeout,
 };
