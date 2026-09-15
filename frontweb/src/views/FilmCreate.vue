@@ -995,6 +995,8 @@
             <span class="sb-ctrl-num">{{ i + 1 }}</span>
             <span class="sb-ctrl-title">{{ sb.title || '未命名分镜' }}</span>
             <el-tag v-if="sb.movement" size="small" effect="plain" type="info" class="sb-movement-tag">{{ getMovementLabel(sb.movement) }}</el-tag>
+            <el-tag v-if="(sb.rationale || '').toString().trim()" size="small" effect="plain" type="warning" class="sb-rationale-tag" :title="sb.rationale">导演理由</el-tag>
+            <el-tag v-if="(sb.transition || '').toString().trim() && (sb.transition || '').toLowerCase() !== 'cut'" size="small" effect="plain" class="sb-transition-tag">{{ sb.transition }}</el-tag>
             <el-button size="small" plain class="sb-ctrl-btn sb-ctrl-config-btn" @click="onOpenVideoParamsDialog(sb)">⚙ 分镜配置</el-button>
             <el-button
               size="small"
@@ -9809,6 +9811,8 @@ html.light .storyboard-row:hover {
 html.light .sb-ctrl-title {
   color: #000;
 }
+.sb-rationale-tag.el-tag { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-transition-tag.el-tag { text-transform: uppercase; }
 .sb-movement-tag.el-tag {
   height: 18px;
   line-height: 18px;

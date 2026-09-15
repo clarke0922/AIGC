@@ -173,6 +173,8 @@ function ensureAllColumns(database) {
     { name: 'narration_audio_local_path', type: 'TEXT' },         // 解说旁白 TTS 本地路径
     { name: 'creation_mode',     type: 'TEXT DEFAULT \'classic\'' }, // classic | universal
     { name: 'universal_segment_text', type: 'TEXT' },              // 全能模式片段描述（@ 引用等）
+    { name: 'rationale',         type: 'TEXT' },               // KSR 导演顾问：本镜设计理由
+    { name: 'transition',       type: 'TEXT' },               // KSR 导演顾问：转场方式
     { name: 'first_frame_image_id', type: 'INTEGER' },
     { name: 'last_frame_image_id',  type: 'INTEGER' },
     { name: 'last_frame_image_url', type: 'TEXT' },

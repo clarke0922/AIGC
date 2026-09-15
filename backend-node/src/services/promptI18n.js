@@ -123,7 +123,7 @@ function getStoryboardSystemPrompt(cfg) {
    - Extreme Close-Up (ECU): Key props, intense emotions
 
 3. **Camera Movement Requirements**（**Dynamic Priority Mandatory**）:
-   - 【Core Rule】: Every video segment MUST use **dynamic camera movement**. **Static/fixed shots shall not exceed 20%**. Prioritize push/pull/pan/tilt/track/crane/orbit/whip/roll/zoom.
+   - 【Core Rule】: Static/fixed is the DEFAULT. Move the camera ONLY when the emotion motivates it (tension rising, a reveal, a decision, pursuit); a movement without emotional reason is showy and must be cut. Do NOT force a dynamic-shot quota or cap static shots — choose each movement from the beat.
    - Basic movements:
      * Push In: Forward approach, builds tension/intimacy
      * Pull Out: Backward reveal, shows environment or emotional release
@@ -174,7 +174,7 @@ function getStoryboardSystemPrompt(cfg) {
    - time: Time of day (e.g., "morning", "dusk", "night", "afternoon")
    - shot_type: Shot type (extreme long shot/long shot/medium shot/close-up/extreme close-up)
    - camera_angle: Camera angle (eye-level/low-angle/high-angle/side/back)
-   - camera_movement: Camera movement — MUST be one of: static, push, pull, pan, tilt, tracking, crane_up, crane_dn, orbit, handheld, zoom, roll, whip_pan, spiral, hitchcock_zoom, bullet_time, dutch_angle_move, dolly_track, slowmo_orbit (prefer dynamic over static)
+   - camera_movement: Camera movement — MUST be one of: static, push, pull, pan, tilt, tracking, crane_up, crane_dn, orbit, handheld, zoom, roll, whip_pan, spiral, hitchcock_zoom, bullet_time, dutch_angle_move, dolly_track, slowmo_orbit (static is default; pick a movement only when the beat motivates it)
    - lighting_style: Lighting style — choose ONE: natural/front/side/backlit/top/under/soft/dramatic/golden_hour/blue_hour/night/neon
    - depth_of_field: Depth of field — choose ONE: extreme_shallow/shallow/medium/deep (close-up → shallow/extreme_shallow; wide shot → deep)
    - action: Action description
@@ -182,8 +182,23 @@ function getStoryboardSystemPrompt(cfg) {
    - dialogue: Character dialogue or narration (if any)
    - emotion: Current emotion
    - emotion_intensity: Emotion intensity level (3/2/1/0/-1)
+   - rationale: One-sentence DESIGN REASON for this exact shot_size / angle / movement choice, grounded in emotion, beat, or character power relation (e.g., "tighten to CU as the accusation lands so the audience reads the listener's reaction"). Never empty.
+   - transition: Transition INTO the next shot — one of cut/dissolve/fade/whip_pan/hard_cut/match_cut; default cut, use a non-cut transition only when the beat motivates it.
 
 **CRITICAL: Return ONLY a valid JSON array. Do NOT include any markdown code blocks, explanations, or other text. Start directly with [ and end with ].**
+
+[DIRECTOR'S DECISION CONTRACT — HIGHEST PRIORITY]
+Work like a director advising a beginner: every choice translates emotion, and every shot must carry its reason.
+1. Decompose the scene into five variables first: dominant emotion; dramatic beat (setup/escalation/turning-point/outburst/resolution); character relations (who holds power); space (interior/exterior, scale, key props); action (who does what). If information is missing, proceed with a reasonable assumption.
+2. Build ONE tension arc before shot-listing: the scene has exactly ONE highest-tension peak; every other shot serves it. A beat of stillness MUST precede an outburst, and a release (pull-back / wide / empty frame) MUST follow it. Open wide to establish space and staging; close on the person who is left / the emotional residue, not whoever exits.
+3. Shot size = emotional distance: as conflict escalates, tighten size progressively (wide -> medium -> close -> ECU); snapping back to wide after an outburst reads as detachment. Avoid 3+ identical sizes in a row.
+4. Angle = power relation: eye-level is neutral; low angle empowers, high angle weakens/judges; dutch angle (tilted frame) only for imbalance or psychological breakdown.
+5. Dialogue uses shot/reverse-shot as backbone but LISTENER-FIRST: on the decisive line cut to the listener's reaction — emotion lives on the listener's face. Speaker close-ups at most 2-3 per scene. Respect the 180-degree axis unless disorientation is intended.
+6. Cut only at four legal points: an emotional turn, the peak frame of an action, after a key line (to the reaction), or a breathing pause. NEVER cut on an even time interval.
+7. One shot = one action unit with at most 3 physical actions (more breaks AI generation). Externalize emotion as FILMABLE PHYSICAL ACTION: not "he is angry" but "he clenches his fist until his knuckles whiten".
+8. Light only as PHYSICAL FACTS, never mood adjectives: write "a single desk lamp lights half the face, the rest in shadow", not "oppressive atmosphere"; state source direction, hardness, color temperature.
+9. Before an action outburst give one wide shot establishing where everyone is, so rapid cutting reads as tension not confusion; show the cost afterwards (breath, wounds, disarray).
+10. If a single scene needs more than 14 shots, split it into two scenes rather than over-cramming.
 
 [Important Notes]
 - Shot count should match the number of **narrative beats** in the script (merging rapid consecutive actions with internal cuts inside a single storyboard entry is encouraged to optimize AI video duration)
@@ -213,8 +228,8 @@ function getStoryboardSystemPrompt(cfg) {
    - 近景：细节展示、情绪表达
    - 特写：关键道具、强烈情绪
 
-3. **运镜要求**（**强制动态优先**）：
-   - 【运镜总原则】：每段视频必须使用**动态运镜**，**固定镜头不得超过20%**。优先选择推/拉/摇/跟/升/降/环绕/甩/旋转/变焦等运动镜头。
+3. **运镜要求**（**情绪驱动，固定为默认**）：
+   - 【运镜总原则】：**固定镜头是默认**，只有当情绪需要时才动镜头（紧张升级、揭示、下决心、追逐等）；没有情绪理由的运镜是炫技，必须砍掉。不强制运动镜头占比、不设固定镜头配额，每个运镜都必须能在 rationale 中讲出情绪依据。
    - 基础运镜：
      * 推镜（push）：镜头向前推进，增强紧张/亲密感
      * 拉镜（pull）：镜头向后拉开，揭示环境或情绪回落
@@ -265,7 +280,7 @@ function getStoryboardSystemPrompt(cfg) {
    - time：拍摄时间（如"清晨"、"黄昏"、"夜晚"、"午后"）
    - shot_type：景别（大远景/远景/中景/近景/特写）
    - camera_angle：机位角度（平视/仰视/俯视/侧面/背面）
-   - camera_movement：运镜方式（static/推镜push/拉镜pull/横摇pan/纵摇tilt/跟镜tracking/升镜crane_up/降镜crane_dn/环绕orbit/手持handheld/变焦zoom/旋转roll/甩镜whip_pan/螺旋spiral/希区柯克hitchcock_zoom/子弹时间bullet_time/荷兰角dutch_angle_move/推轨复合dolly_track/升格环绕slowmo_orbit）——**强制动态优先，固定镜头不得超过20%**
+   - camera_movement：运镜方式（static/推镜push/拉镜pull/横摇pan/纵摇tilt/跟镜tracking/升镜crane_up/降镜crane_dn/环绕orbit/手持handheld/变焦zoom/旋转roll/甩镜whip_pan/螺旋spiral/希区柯克hitchcock_zoom/子弹时间bullet_time/荷兰角dutch_angle_move/推轨复合dolly_track/升格环绕slowmo_orbit）（固定为默认，仅在节拍需要时选择运镜）
    - lighting_style：灯光风格 — 从以下选一个填入：natural/front/side/backlit/top/under/soft/dramatic/golden_hour/blue_hour/night/neon（根据 time 和 atmosphere 判断；夜晚→night，黄昏→golden_hour，室内暖光→soft，强情绪→dramatic，逆光→backlit）
    - depth_of_field：景深 — 从以下选一个填入：extreme_shallow/shallow/medium/deep（特写/近景→shallow，中景→medium，远景/大远景→deep）
    - action：动作描述
@@ -273,6 +288,8 @@ function getStoryboardSystemPrompt(cfg) {
    - dialogue：角色对话或旁白（如有）
    - emotion：当前情绪
    - emotion_intensity：情绪强度等级（3/2/1/0/-1）
+   - rationale：本镜的**设计理由**（一句话），说明该景别/角度/运镜为何服务于情绪、节拍或人物强弱关系（例如“质问落地时切近景，让观众读到挨骂者的反应”），严禁留空
+   - transition：与下一镜的**转场方式**，从 cut/dissolve/fade/whip_pan/hard_cut/match_cut 中选一个，默认 cut，仅在节拍需要时使用非常规转场
 
 2. **构图与视觉设计参考**（生成分镜时运用）：
    - 景别变化规律：禁止连续3个及以上镜头使用相同景别，情绪递进时逐步推近（远→中→近→特写）
@@ -281,6 +298,19 @@ function getStoryboardSystemPrompt(cfg) {
    - 对话场景：使用正反打（过肩镜头交替），避免连续同向构图
 
 **重要：必须只返回纯JSON数组，不要包含任何markdown代码块、说明文字或其他内容。直接以 [ 开头，以 ] 结尾。**
+
+【导演决策合同——最高优先级】
+以一位面向新手的导演顾问方式工作：每个镜头选择都在翻译情绪，且每镜必须能讲出理由。
+1. 先拆五个调度变量：主导情绪；戏剧节拍（铺垫/升级/转折/爆发/收尾）；人物关系（谁占上风）；空间（室内外、空间大小、关键道具）；动作（谁在做什么）。信息不足时按合理假设推进。
+2. 排镜前先定一条张力曲线：一场戏**最高点只有一个**，其余镜头都为它服务；爆发前必须先给一拍安静（静默特写或固定镜头），爆发后必须给释放（拉远/大远景/空镜）。开场用远景/大远景建立空间与站位；收尾停在被留下的人或情绪余味上，不追离场者。
+3. 景别=情绪距离：冲突升级时景别逐步收紧（远→中→近→特写）；爆发后突然回全景表达抽离；禁止连续3个以上相同景别。
+4. 角度=权力关系：平视客观，仰拍赋予强势，俯拍表现弱势/审视，荷兰角（画面倾斜）只用于失衡或心理失常。
+5. 对话以正反打为骨架但**听者优先**：关键台词落地时切到听者反应镜（情绪发生在听者脸上）；全场说话者特写最多2-3个；遵守180度轴线，除非有意制造混乱。
+6. 只在四个合法切点切换：情绪转折处、动作顶点那一帧、台词重锤后（切听者）、呼吸停顿处；**禁止按时间均匀切镜**。
+7. 一镜一个动作单元，单镜物理动作**不超过3个**（超了AI必崩）；情绪必须外化为**可拍摄的物理动作**：不写“他愤怒”，写“他攥紧拳头、指节发白”。
+8. 光线只写**物理事实**、不写情绪形容词：写“仅一盏台灯，人物半张脸在阴影里”，不写“氛围压抑”；须写清光源方向、软硬、色温。
+9. 动作爆发前先给一镜全景建立人物方位，碎切才是紧张而非混乱；爆发后让代价可见（喘息、伤痕、狼狈）。
+10. 单场若超过14镜，拆成两场戏，不要硬塞。
 
 【重要提示】
 - 镜头数量应与剧本中的**叙事节拍**数量匹配（允许在单个分镜内用内部切镜合并快速连续动作，以优化AI视频时长）
@@ -477,9 +507,9 @@ function getStoryboardUserPromptSuffix(cfg, shotDuration) {
 
 **Audio rule**: bgm_prompt MUST be an empty string or "No BGM". Do not design background music per shot. Put only diegetic ambience, foley, and voice/timbre details in sound_effect, so audio remains consistent across clips.
 
-**Output**: JSON with "storyboards" array. Each item: shot_number, segment_index, segment_title, title, shot_type, angle, time, location, scene_id, movement, action, dialogue, result, atmosphere, emotion, duration, bgm_prompt, sound_effect, characters (array of IDs), props (array of prop IDs), is_primary. Return ONLY valid JSON, no markdown.`;
+**Output**: JSON with "storyboards" array. Each item: shot_number, segment_index, segment_title, title, shot_type, angle, time, location, scene_id, movement, action, dialogue, result, atmosphere, emotion, duration, bgm_prompt, sound_effect, characters (array of IDs), props (array of prop IDs), is_primary, rationale (non-empty design reason), transition (cut/dissolve/fade/whip_pan/hard_cut/match_cut). Return ONLY valid JSON, no markdown.`;
   }
-  const _sbUserLocked = `\n\n【输出格式】请以JSON格式输出，包含 "storyboards" 数组。每个镜头包含：shot_number, segment_index, segment_title, title, shot_type, angle, time, location, scene_id, movement, action, dialogue, result, atmosphere, emotion, duration, bgm_prompt, sound_effect, characters（角色ID数组）, props（道具ID数组）, is_primary, **layout_description（画面布局与人物站位描述，必填，最高优先级空间合同）**。**必须只返回纯JSON，不要markdown。**`;
+  const _sbUserLocked = `\n\n【输出格式】请以JSON格式输出，包含 "storyboards" 数组。每个镜头包含：shot_number, segment_index, segment_title, title, shot_type, angle, time, location, scene_id, movement, action, dialogue, result, atmosphere, emotion, duration, bgm_prompt, sound_effect, characters（角色ID数组）, props（道具ID数组）, is_primary, rationale（必填，本镜设计理由，一句话）, transition（转场：cut/dissolve/fade/whip_pan/hard_cut/match_cut，默认cut）, **layout_description（画面布局与人物站位描述，必填，最高优先级空间合同）**。**必须只返回纯JSON，不要markdown。**`;
   const _sbUserOverride = _overrideCache['storyboard_user_suffix'];
   if (_sbUserOverride) {
     return '\n\n' + _sbUserOverride + _sbUserLocked;
@@ -517,7 +547,7 @@ function getStoryboardUserPromptSuffix(cfg, shotDuration) {
 **duration时长**：${durationInstruction}。
 **声音一致性**：所有镜头默认无BGM；若有对白/旁白，sound_effect 必须补充音色与情绪强度，并与动作节奏、环境声保持一致。
 
-【输出格式】请以JSON格式输出，包含 "storyboards" 数组。每个镜头包含：shot_number, segment_index, segment_title, title, shot_type, angle, time, location, scene_id, movement, action, dialogue, result, atmosphere, emotion, duration, bgm_prompt, sound_effect, characters（角色ID数组）, props（道具ID数组）, is_primary。**必须只返回纯JSON，不要markdown。**`;
+【输出格式】请以JSON格式输出，包含 "storyboards" 数组。每个镜头包含：shot_number, segment_index, segment_title, title, shot_type, angle, time, location, scene_id, movement, action, dialogue, result, atmosphere, emotion, duration, bgm_prompt, sound_effect, characters（角色ID数组）, props（道具ID数组）, is_primary, rationale（必填，本镜设计理由，一句话）, transition（转场：cut/dissolve/fade/whip_pan/hard_cut/match_cut，默认cut）。**必须只返回纯JSON，不要markdown。**`;
 }
 
 /**
@@ -985,7 +1015,7 @@ function getDefaultPromptBody(key) {
       return '你是一位专业的编剧。你的任务是根据用户提供的故事梗概，创作 ${n} 集完整的短片剧本。\n\n要求：\n1. 用中文写作，叙事清晰流畅，适合后续拆分为分镜。\n2. 可以包含场景描述、角色动作与对话，但不要输出分镜格式、镜头编号或「内景/外景」等场次标记。\n3. 每集约 800 字。如有多集，剧情必须前后衔接——每集从上一集结尾处推进，确保整体故事连贯。\n4. 每集有清晰的起承转合，结尾留有悬念或转折，吸引观众看下一集。';
 
     case 'storyboard_system':
-      return '【角色】你是一位资深影视分镜师，精通罗伯特·麦基的镜头拆解理论，擅长构建情绪节奏。\n\n【任务】将小说剧本按**独立动作单元**拆解为分镜头方案。\n\n【分镜拆解原则】\n1. **动作单元划分**：每个镜头必须对应一个完整且独立的动作\n   - 一个动作 = 一个镜头（角色站起来、走过去、说一句话、做一个反应表情等）\n   - 禁止合并多个动作（站起+走过去应拆分为2个镜头）\n\n2. **景别标准**（根据叙事需要选择）：\n   - 大远景：环境、氛围营造\n   - 远景：全身动作、空间关系\n   - 中景：交互对话、情感交流\n   - 近景：细节展示、情绪表达\n   - 特写：关键道具、强烈情绪\n\n3. **运镜要求**：\n   - 固定镜头：稳定聚焦于一个主体\n   - 推镜：接近主体，增强紧张感\n   - 拉镜：扩大视野，交代环境\n   - 摇镜：水平移动摄像机，空间转换\n   - 跟镜：跟随主体移动\n   - 移镜：摄像机与主体同向移动\n\n4. **情绪与强度标记**：\n   - emotion：简短描述（兴奋、悲伤、紧张、愉快等）\n   - emotion_intensity：用箭头表示情绪等级\n     * 极强 ↑↑↑ (3)：情绪高峰、高度紧张\n     * 强 ↑↑ (2)：情绪明显波动\n     * 中 ↑ (1)：情绪有所变化\n     * 平稳 → (0)：情绪不变\n     * 弱 ↓ (-1)：情绪回落\n\n【输出要求】\n1. 生成一个数组，每个元素是一个镜头，包含：\n   - shot_number：镜头号\n   - scene_description：场景（地点+时间，如"卧室内，早晨"）\n   - shot_type：景别（大远景/远景/中景/近景/特写）\n   - camera_angle：机位角度（平视/仰视/俯视/侧面/背面）\n   - camera_movement：运镜方式（static/推镜push/拉镜pull/横摇pan/纵摇tilt/跟镜tracking/升镜crane_up/降镜crane_dn/环绕orbit/手持handheld/变焦zoom/旋转roll/甩镜whip_pan/螺旋spiral/希区柯克hitchcock_zoom/子弹时间bullet_time/荷兰角dutch_angle_move/推轨复合dolly_track/升格环绕slowmo_orbit）——**强制动态优先，固定镜头不得超过20%**\n   - action：动作描述\n   - result：动作完成后的画面结果\n   - dialogue：角色对话或旁白（如有）\n   - emotion：当前情绪\n   - emotion_intensity：情绪强度等级（3/2/1/0/-1）';
+      return '【角色】你是一位资深影视分镜师，精通罗伯特·麦基的镜头拆解理论，擅长构建情绪节奏。\n\n【任务】将小说剧本按**独立动作单元**拆解为分镜头方案。\n\n【分镜拆解原则】\n1. **动作单元划分**：每个镜头必须对应一个完整且独立的动作\n   - 一个动作 = 一个镜头（角色站起来、走过去、说一句话、做一个反应表情等）\n   - 禁止合并多个动作（站起+走过去应拆分为2个镜头）\n\n2. **景别标准**（根据叙事需要选择）：\n   - 大远景：环境、氛围营造\n   - 远景：全身动作、空间关系\n   - 中景：交互对话、情感交流\n   - 近景：细节展示、情绪表达\n   - 特写：关键道具、强烈情绪\n\n3. **运镜要求**：\n   - 固定镜头：稳定聚焦于一个主体\n   - 推镜：接近主体，增强紧张感\n   - 拉镜：扩大视野，交代环境\n   - 摇镜：水平移动摄像机，空间转换\n   - 跟镜：跟随主体移动\n   - 移镜：摄像机与主体同向移动\n\n4. **情绪与强度标记**：\n   - emotion：简短描述（兴奋、悲伤、紧张、愉快等）\n   - emotion_intensity：用箭头表示情绪等级\n     * 极强 ↑↑↑ (3)：情绪高峰、高度紧张\n     * 强 ↑↑ (2)：情绪明显波动\n     * 中 ↑ (1)：情绪有所变化\n     * 平稳 → (0)：情绪不变\n     * 弱 ↓ (-1)：情绪回落\n\n【输出要求】\n1. 生成一个数组，每个元素是一个镜头，包含：\n   - shot_number：镜头号\n   - scene_description：场景（地点+时间，如"卧室内，早晨"）\n   - shot_type：景别（大远景/远景/中景/近景/特写）\n   - camera_angle：机位角度（平视/仰视/俯视/侧面/背面）\n   - camera_movement：运镜方式（static/推镜push/拉镜pull/横摇pan/纵摇tilt/跟镜tracking/升镜crane_up/降镜crane_dn/环绕orbit/手持handheld/变焦zoom/旋转roll/甩镜whip_pan/螺旋spiral/希区柯克hitchcock_zoom/子弹时间bullet_time/荷兰角dutch_angle_move/推轨复合dolly_track/升格环绕slowmo_orbit）（固定为默认，仅在节拍需要时选择运镜）\n   - action：动作描述\n   - result：动作完成后的画面结果\n   - dialogue：角色对话或旁白（如有）\n   - emotion：当前情绪\n   - emotion_intensity：情绪强度等级（3/2/1/0/-1）';
 
     case 'character_extraction':
       return '你是一个专业的角色分析师，擅长从剧本中提取和分析角色信息。\n\n**【语言要求】所有字段的值必须使用中文，禁止出现英文内容（role字段的值除外，固定为 main/supporting/minor）。**\n\n你的任务是根据提供的剧本内容，提取并整理剧中出现的所有有名字角色的设定。\n\n要求：\n1. 提取所有有名字的角色（忽略无名路人或背景角色）\n2. 对每个角色，提取以下信息（全部用中文填写）：\n   - name: 角色名字（中文）\n   - role: 角色类型，固定值之一：main / supporting / minor\n   - appearance: 外貌描述（中文，100-200字，包含性别、年龄、体型、面部特征、发型、服装风格等，不含任何场景或环境信息）\n   - description: 背景故事和角色关系（中文，50-100字）\n3. 主要角色外貌要详细，次要角色可以简化';
